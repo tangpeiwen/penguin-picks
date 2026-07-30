@@ -1,0 +1,75 @@
+<view class="screen results-screen">
+  <view class="topbar">
+    <button class="back" bindtap="goBack" aria-label="返回">←</button>
+    <image class="mini-mascot" src="/assets/icons/mascot-red.png" mode="aspectFit"></image>
+  </view>
+
+  <view class="summary hand-title fade-up">{{summary}}</view>
+
+  <scroll-view class="filter-scroll" scroll-x="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
+    <view class="filters">
+      <button class="filter-chip {{filters.cuisine ? 'active' : ''}}" data-key="cuisine" bindtap="openFilter">{{filterLabels.cuisine}}⌄</button>
+      <button class="filter-chip {{filters.price ? 'active' : ''}}" data-key="price" bindtap="openFilter">{{filterLabels.price}}⌄</button>
+      <button class="filter-chip {{filters.diet ? 'active' : ''}}" data-key="diet" bindtap="openFilter">{{filterLabels.diet}}⌄</button>
+    </view>
+  </scroll-view>
+
+  <view class="result-list fade-up">
+    <view
+      wx:for="{{results}}"
+      wx:key="id"
+      class="restaurant-card paper-card {{expandedId === item.id ? 'expanded' : ''}}"
+      style="animation-delay: {{index * 55}}ms"
+    >
+      <view class="card-main" data-id="{{item.id}}" bindtap="toggleDetail">
+        <view class="card-copy">
+          <view class="card-heading">
+            <text class="restaurant-name hand-title">{{item.name}}</text>
+            <text class="chevron">{{expandedId === item.id ? '−' : '+'}}</text>
+          </view>
+          <text class="restaurant-review">{{item.review}}</text>
+          <view class="meta-line">
+            <text class="price">人均 ¥{{item.priceLabel}}</text>
+            <text class="dot">·</text>
+            <text>{{item.location}}</text>
+          </view>
+          <view class="tag-line">
+            <text class="reservation {{item.reservationLevel}}">{{item.reservationLabel}}</text>
+            <text class="cuisine">{{item.cuisineLabel}}</text>
+          </view>
+        </view>
+      </view>
+      <view wx:if="{{expandedId === item.id}}" class="card-detail">
+        <view class="detail-label">为什么放进来</view>
+        <text>{{item.fullReview}}</text>
+        <view class="detail-row"><text class="detail-label">订位</text><text>{{item.reservationNote}}</text></view>
+        <button class="address-button" data-address="{{item.address}}" bindtap="copyAddress">{{item.address}} <text>复制</text></button>
+      </view>
+    </view>
+    <view wx:if="{{!results.length}}" class="empty paper-card">
+      <view class="empty-face">⌣</view>
+      <text>这组条件有点难凑，试试少选一个条件。</text>
+    </view>
+  </view>
+
+  <button class="change-batch" bindtap="changeBatch">换一批 <text>→</text></button>
+
+  <view wx:if="{{activeFilter}}" class="sheet-mask" bindtap="closeFilter">
+    <view class="filter-sheet" catchtap="noop">
+      <view class="sheet-handle"></view>
+      <view class="sheet-title hand-title">{{activeTitle}}</view>
+      <text wx:if="{{activeFilter === 'diet'}}" class="sheet-note">仅按现有菜系信息初筛；涉及过敏原，请订位时再和餐厅确认。</text>
+      <view class="option-list">
+        <button
+          wx:for="{{activeOptions}}"
+          wx:key="id"
+          class="option {{filters[activeFilter] === item.id ? 'selected' : ''}}"
+          data-value="{{item.id}}"
+          data-label="{{item.label}}"
+          bindtap="chooseFilter"
+        >{{item.label}}<text wx:if="{{filters[activeFilter] === item.id}}">✓</text></button>
+      </view>
+      <button class="clear" bindtap="clearFilter">不限</button>
+    </view>
+  </view>
+</view>

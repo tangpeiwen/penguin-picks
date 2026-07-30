@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# WeChat DevTools local/private state
+project.private.config.json
+miniprogram_npm/
+
+# Local agent and editor state
+.agents/
+.workbuddy/
+.vscode/
+.idea/
+
+# Generated data and temporary assets
+outputs/
+tmp/
+
+# External source checkouts
+third_party/
+
+# Dependencies and build/test caches
+node_modules
+node_modules/
+coverage/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Secrets and local logs
+.env
+.env.*
+!.env.example
+*.log
+*.pid

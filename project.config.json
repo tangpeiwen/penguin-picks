@@ -1,0 +1,45 @@
+{
+  "description": "懂你饭局的上海餐厅推荐小程序",
+  "packOptions": {
+    "ignore": [
+      {
+        "value": "outputs",
+        "type": "folder"
+      },
+      {
+        "value": "third_party",
+        "type": "folder"
+      },
+      {
+        "value": "tools",
+        "type": "folder"
+      }
+    ],
+    "include": []
+  },
+  "setting": {
+    "useCompilerPlugins": false,
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "enhance": true,
+    "compileHotReLoad": true,
+    "urlCheck": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "ignoreUploadUnusedFiles": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "3.17.0",
+  "projectname": "fanju-restaurant-picker",
+  "miniprogramRoot": "miniprogram/",
+  "srcMiniprogramRoot": "miniprogram/",
+  "condition": {},
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  }
+}

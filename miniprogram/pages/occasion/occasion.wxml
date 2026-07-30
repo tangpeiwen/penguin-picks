@@ -1,0 +1,41 @@
+<view class="screen occasion-screen">
+  <image class="mascot" src="/assets/icons/mascot-red.png" mode="aspectFit" aria-label="饭碗小厨师"></image>
+
+  <view class="hero fade-up">
+    <text class="eyebrow">帮你挑一家，刚刚好的餐厅</text>
+    <view class="hand-title title">这顿饭，\n是什么场合？</view>
+    <view class="blue-stroke"></view>
+  </view>
+
+  <view class="occasion-grid primary-grid fade-up">
+    <button
+      wx:for="{{primaryOptions}}"
+      wx:key="id"
+      class="occasion-card paper-card {{item.tone}} {{selected === item.id ? 'selected' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="chooseOccasion"
+      hover-class="card-pressed"
+    >
+      <image class="occasion-icon" src="{{item.icon}}" mode="aspectFit"></image>
+      <text class="occasion-label">{{item.label}}</text>
+    </button>
+  </view>
+
+  <view class="occasion-divider fade-up"></view>
+
+  <view class="occasion-grid secondary-grid fade-up">
+    <button
+      wx:for="{{secondaryOptions}}"
+      wx:key="id"
+      class="occasion-card secondary-card paper-card {{item.tone}} {{selected === item.id ? 'selected' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="chooseOccasion"
+      hover-class="card-pressed"
+    >
+      <image class="occasion-icon secondary-icon" src="{{item.icon}}" mode="aspectFit"></image>
+      <text class="occasion-label secondary-label {{item.compact ? 'compact' : ''}}">{{item.label}}</text>
+    </button>
+  </view>
+
+  <button class="browse" bindtap="explore" hover-class="browse-pressed">看看我都吃了什么 <text>→</text></button>
+</view>

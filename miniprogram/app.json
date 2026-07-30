@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/occasion/occasion",
+    "pages/preferences/preferences",
+    "pages/results/results"
+  ],
+  "window": {
+    "navigationStyle": "custom",
+    "backgroundColor": "#f3ecdf",
+    "backgroundTextStyle": "dark"
+  },
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

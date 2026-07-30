@@ -1,0 +1,59 @@
+@import "./styles/fonts.wxss";
+
+page {
+  --paper: #f8f3e9;
+  --paper-deep: #f1e8d9;
+  --ink: #3b2925;
+  --muted: #806e67;
+  --red: #a72f2e;
+  --red-dark: #84201f;
+  --blue: #bdd8e8;
+  --blue-deep: #91b7cd;
+  --line: #decfbd;
+  --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-hand: "LemiXiaoNaiPao", "Kaiti SC", "STKaiti", "KaiTi", "Songti SC", serif;
+  min-height: 100%;
+  color: var(--ink);
+  background-color: var(--paper-deep);
+  font-family: var(--font-body);
+}
+
+button {
+  font: inherit;
+}
+
+button::after {
+  border: 0;
+}
+
+.screen {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: calc(env(safe-area-inset-top) + 34rpx) 40rpx calc(env(safe-area-inset-bottom) + 40rpx);
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(167, 47, 46, 0.035) 0, rgba(167, 47, 46, 0.035) 2rpx, transparent 3rpx),
+    radial-gradient(circle at 78% 62%, rgba(111, 159, 190, 0.04) 0, rgba(111, 159, 190, 0.04) 2rpx, transparent 3rpx);
+  background-size: 45rpx 47rpx, 57rpx 53rpx;
+}
+
+.hand-title {
+  font-family: var(--font-hand);
+  font-weight: 400;
+  letter-spacing: 3rpx;
+}
+
+.paper-card {
+  background: rgba(255, 253, 248, 0.94);
+  border: 2rpx solid rgba(115, 78, 62, 0.1);
+  box-shadow: 0 10rpx 24rpx rgba(78, 52, 41, 0.08);
+}
+
+.fade-up {
+  animation: fade-up 360ms ease-out both;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(14rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
