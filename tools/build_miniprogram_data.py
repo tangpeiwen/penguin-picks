@@ -7,15 +7,64 @@ import csv
 import json
 import re
 from pathlib import Path
+from typing import Optional
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "outputs" / "大众点评_合并.csv"
+SOURCE = ROOT / "outputs" / "大众点评_合并_带经纬度.csv"
 TARGET = ROOT / "miniprogram" / "data" / "restaurants.js"
 
 
 def split_tags(value: str) -> list[str]:
     return [part.strip() for part in re.split(r"[,，、/]", value or "") if part.strip()]
+
+
+def split_dish_names(value: str) -> list[str]:
+    text = (value or "").strip(" ，,、/；;！!")
+    if not text:
+        return []
+    parts = re.split(r"[、,，/；;！!\s]+", text)
+    dishes: list[str] = []
+    for part in parts:
+        dish = part.strip()
+        if dish and dish not in dishes:
+            dishes.append(dish)
+    return dishes[:7]
+
+
+def dish_names(row: dict[str, str]) -> list[str]:
+    """Use only the reviewed CSV dish field; never infer or pad missing dishes."""
+    dishes = split_dish_names(row.get("点菜", ""))
+    return dishes
+
+
+def coordinate(row: dict[str, str], names: tuple[str, ...]) -> Optional[float]:
+    for name in names:
+        value = (row.get(name) or "").strip()
+        if not value:
+            continue
+        try:
+            return float(value)
+        except ValueError:
+            pass
+    return None
+
+
+def building_name(address: str) -> str:
+    """Extract a compact mall/building name for the result-list location line."""
+    text = re.split(r"[（(]", address or "", maxsplit=1)[0]
+    suffixes = (
+        "购物中心", "金融中心", "嘉里中心", "国金中心", "信德中心", "外滩金融中心",
+        "港汇恒隆广场", "恒隆广场", "新世纪广场", "上海广场", "广场", "大厦", "商城", "商场",
+        "前滩太古里", "太古里", "万象天地", "新天地", "来福士广场", "来福士", "里", "坊",
+    )
+    suffix_pattern = "|".join(sorted((re.escape(item) for item in suffixes), key=len, reverse=True))
+    candidates = re.findall(rf"([^0-9A-Za-z\s，,、]{{0,10}}[A-Za-z0-9·一-鿿]{{1,18}}?(?:{suffix_pattern}))", text)
+    if not candidates:
+        return ""
+    candidate = candidates[-1]
+    candidate = re.split(r"(?:街道|镇|路|街|弄|号)", candidate)[-1]
+    return candidate.strip("，,、- ")[:20]
 
 
 def price_range(value: str) -> tuple[int, int]:
@@ -45,6 +94,30 @@ def reservation(value: str) -> tuple[str, str]:
     if "排队" in text:
         return "medium", "可能要等位"
     return "easy", "到店即可"
+
+
+def reservation_display(value: str) -> str:
+    """Keep only booking information that meaningfully deviates from the default."""
+    text = re.sub(r"\s+", "", value or "")
+    if not text:
+        return ""
+    timing = re.search(r"(?:至少)?提前\d+(?:-\d+)?(?:天|周|个月|小时)", text)
+    if timing:
+        label = timing.group(0).replace("-", "–")
+        if "不太walkin" in text:
+            return f"不太能 walk-in · {label}"
+        return label if label.startswith("至少") else f"需{label}"
+    if any(term in text for term in ("不接受预订", "不接受预定", "不能预订", "不能预定", "不太walkin")):
+        return (value or "").strip()
+    if "抢位置" in text:
+        return "小程序3点抢位"
+    if "线下排队" in text:
+        return "仅线下排队"
+    if "现场取号" in text or "排队很久" in text:
+        return "现场取号，排队较久"
+    if "无法线上取号" in text or "不能线上取号" in text:
+        return "高峰期排队 · 不能线上取号" if "高峰期" in text else "不能线上取号"
+    return ""
 
 
 def occasions(row: dict[str, str], low: int) -> list[str]:
@@ -110,11 +183,15 @@ def main() -> None:
     for index, row in enumerate(reviewed, start=1):
         low, high = price_range(row.get("人均", ""))
         cuisines = split_tags(row.get("菜系", ""))
+        dishes = dish_names(row)
         reservation_level, reservation_label = reservation(row.get("订位", ""))
+        latitude = coordinate(row, ("纬度", "latitude", "lat"))
+        longitude = coordinate(row, ("经度", "longitude", "lng", "lon"))
         restaurant = {
             "id": row.get("店铺ID") or f"restaurant-{index}",
             "name": (row.get("店名") or "未命名餐厅").strip(),
             "cuisines": cuisines,
+            "dishes": dishes,
             "priceLabel": (row.get("人均") or "价格待确认").strip(),
             "priceMin": low,
             "priceMax": high,
@@ -123,11 +200,16 @@ def main() -> None:
             "reservationLevel": reservation_level,
             "reservationLabel": reservation_label,
             "reservationNote": (row.get("订位") or "建议到店前确认").strip(),
+            "reservationDisplay": reservation_display(row.get("订位", "")),
+            "pitfall": (row.get("避雷") or "").strip(),
             "review": short_review(row.get("评价", "")),
             "fullReview": (row.get("评价") or "").strip(),
             "district": (row.get("行政区") or "").strip(),
             "region": (row.get("商圈标签") or "").strip(),
             "address": (row.get("地址") or "").strip(),
+            "building": building_name(row.get("地址", "")),
+            "latitude": latitude,
+            "longitude": longitude,
             "star": float(row.get("星级") or 0),
             "diet": diet_flags(cuisines, row.get("评价", "")),
             "url": (row.get("大众点评链接") or "").strip(),

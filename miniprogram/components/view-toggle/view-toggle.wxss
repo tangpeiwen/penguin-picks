@@ -1,0 +1,32 @@
+.view-toggle {
+  display: flex;
+  width: 166rpx;
+  height: 58rpx;
+  padding: 4rpx;
+  box-sizing: border-box;
+  border: 2rpx solid #d5c4b2;
+  border-radius: 31rpx 27rpx 30rpx 28rpx;
+  background: rgba(255, 253, 248, .9);
+}
+
+.toggle-item {
+  flex: 1;
+  min-width: 0;
+  height: 46rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 24rpx;
+  background: transparent;
+  color: #806e67;
+  font-size: 21rpx;
+  line-height: 46rpx;
+}
+
+.toggle-item.active {
+  background: #a72f2e;
+  color: #fffaf2;
+}
+
+.toggle-item.disabled {
+  opacity: .48;
+}

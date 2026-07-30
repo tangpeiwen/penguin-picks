@@ -1,10 +1,37 @@
 const assert = require("node:assert/strict");
 const restaurants = require("../miniprogram/data/restaurants");
 const { recommend, describeSelection, regionMatches } = require("../miniprogram/utils/recommend");
+const { dishCountForPeople, orderDishData } = require("../miniprogram/utils/order-card");
 const { REGION_OPTIONS } = require("../miniprogram/config/regions");
 
-assert.equal(restaurants.length, 93, "demo dataset should contain the current reviewed rows");
+assert.equal(restaurants.length, 87, "demo dataset should contain the reviewed rows from the latest geocoded source");
 assert.ok(restaurants.every((item) => item.name && item.review && item.priceLabel));
+assert.ok(restaurants.every((item) => Array.isArray(item.dishes) && item.dishes.length <= 7));
+assert.equal(restaurants.filter((item) => item.dishes.length).length, 69);
+const forbiddenDishFallbacks = ["问店员：", "当日招牌", "时令菜", "现场推荐", "按食量再加"];
+assert.ok(restaurants.every((item) => item.dishes.every((dish) =>
+  forbiddenDishFallbacks.every((fallback) => dish.indexOf(fallback) === -1)
+)), "dish data must not contain generated fallback advice");
+assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "pitfall")));
+assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "reservationDisplay")));
+assert.equal(restaurants.filter((item) => item.reservationDisplay).length, 9);
+assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "latitude") && Object.prototype.hasOwnProperty.call(item, "longitude")));
+assert.ok(restaurants.every((item) => Number.isFinite(item.latitude) && item.latitude > 30 && item.latitude < 32.5));
+assert.ok(restaurants.every((item) => Number.isFinite(item.longitude) && item.longitude > 120 && item.longitude < 123));
+assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "building")));
+assert.ok(restaurants.filter((item) => item.building).length >= 20, "building summaries should be extracted where available");
+assert.ok(restaurants.every((item) => item.building.length <= 20));
+
+assert.deepEqual(
+  ["1", "2", "3-5", "6+"].map(dishCountForPeople),
+  [3, 4, 6, 7],
+  "dish count should follow the selected party size"
+);
+const dishFixture = { dishes: ["一", "二", "三", "四", "五", "六", "七"] };
+assert.equal(orderDishData(dishFixture, "3-5").cardDishes.length, 6);
+assert.equal(orderDishData(dishFixture, "3-5").dishHeading, "点菜参考");
+assert.equal(orderDishData({ dishes: ["一"] }, "6+").cardDishes.length, 1);
+assert.equal(orderDishData({ dishes: [] }, "2").dishHeading, "");
 
 const occasions = ["date", "guest", "friends", "parents", "birthday", "talk", "solo", "casual", "explore"];
 const peopleOptions = ["1", "2", "3-5", "6+"];

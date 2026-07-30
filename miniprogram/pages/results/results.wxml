@@ -2,6 +2,12 @@
   <view class="topbar">
     <button class="back" bindtap="goBack" aria-label="返回">←</button>
     <image class="mini-mascot" src="/assets/icons/mascot-red.png" mode="aspectFit"></image>
+    <view-toggle
+      value="{{viewMode}}"
+      map-disabled="{{mapDisabled}}"
+      bind:change="changeView"
+      bind:unavailable="showMapUnavailable"
+    ></view-toggle>
   </view>
 
   <view class="summary hand-title fade-up">{{summary}}</view>
@@ -14,36 +20,41 @@
     </view>
   </scroll-view>
 
-  <view class="result-list fade-up">
+  <view wx:if="{{viewMode === 'list'}}" class="result-list fade-up">
     <view
       wx:for="{{results}}"
       wx:key="id"
-      class="restaurant-card paper-card {{expandedId === item.id ? 'expanded' : ''}}"
-      style="animation-delay: {{index * 55}}ms"
+      class="restaurant-card paper-card"
+      data-id="{{item.id}}"
+      bindtap="openOrderCard"
+      hover-class="restaurant-card--pressed"
+      hover-start-time="20"
+      hover-stay-time="90"
+      aria-role="button"
+      aria-label="打开{{item.name}}的点菜卡"
     >
-      <view class="card-main" data-id="{{item.id}}" bindtap="toggleDetail">
+      <view class="card-main">
         <view class="card-copy">
           <view class="card-heading">
             <text class="restaurant-name hand-title">{{item.name}}</text>
-            <text class="chevron">{{expandedId === item.id ? '−' : '+'}}</text>
           </view>
-          <text class="restaurant-review">{{item.review}}</text>
-          <view class="meta-line">
-            <text class="price">人均 ¥{{item.priceLabel}}</text>
-            <text class="dot">·</text>
-            <text>{{item.location}}</text>
-          </view>
-          <view class="tag-line">
-            <text class="reservation {{item.reservationLevel}}">{{item.reservationLabel}}</text>
+          <view class="primary-meta">
             <text class="cuisine">{{item.cuisineLabel}}</text>
+            <text class="dot">·</text>
+            <text class="price">{{item.priceDisplay}}</text>
           </view>
+          <view class="location-row">
+            <text class="location-line">{{item.locationSummary}}</text>
+            <button
+              class="navigate-icon"
+              data-id="{{item.id}}"
+              catchtap="openLocation"
+              aria-label="打开{{item.name}}的地图导航"
+            ><image src="/assets/icons/location-red.png" mode="aspectFit"></image></button>
+          </view>
+          <text class="restaurant-review">「{{item.review}}」</text>
+          <text wx:if="{{item.reservationDisplay}}" class="reservation {{item.reservationLevel}}">{{item.reservationDisplay}}</text>
         </view>
-      </view>
-      <view wx:if="{{expandedId === item.id}}" class="card-detail">
-        <view class="detail-label">为什么放进来</view>
-        <text>{{item.fullReview}}</text>
-        <view class="detail-row"><text class="detail-label">订位</text><text>{{item.reservationNote}}</text></view>
-        <button class="address-button" data-address="{{item.address}}" bindtap="copyAddress">{{item.address}} <text>复制</text></button>
       </view>
     </view>
     <view wx:if="{{!results.length}}" class="empty paper-card">
@@ -51,6 +62,85 @@
       <text>这组条件有点难凑，试试少选一个条件。</text>
     </view>
   </view>
+
+  <view wx:elif="{{viewMode === 'map' && !orderCard}}" class="map-view fade-up">
+    <map
+      class="restaurant-map"
+      latitude="{{mapLatitude}}"
+      longitude="{{mapLongitude}}"
+      scale="12"
+      markers="{{mapMarkers}}"
+      include-points="{{mapPoints}}"
+      bindcallouttap="openMarkerLocation"
+      enable-zoom="{{true}}"
+      enable-scroll="{{true}}"
+    ></map>
+    <view class="map-note paper-card">点标记看店名，再点店名导航</view>
+  </view>
+
+  <view wx:if="{{orderCard}}" class="order-mask" bindtap="closeOrderCard">
+    <view class="order-modal">
+      <view class="order-card" catchtap="noop">
+        <text class="order-eyebrow">PENGUIN PICKS · 点菜卡</text>
+        <view
+          class="order-name-row"
+          data-value="{{orderCard.name}}"
+          data-label="店名"
+          bindlongpress="copyText"
+        >
+          <view class="order-name hand-title">{{orderCard.name}}</view>
+          <button class="copy-icon-button" data-value="{{orderCard.name}}" data-label="店名" bindtap="copyText" aria-label="复制店名">
+            <view class="copy-glyph"><view class="copy-back"></view><view class="copy-front"></view></view>
+          </button>
+        </view>
+        <text class="order-meta">{{orderCard.cuisineLabel}} · {{orderCard.priceDisplay}}</text>
+        <text class="order-location">{{orderCard.locationSummary}}</text>
+        <block wx:if="{{orderCard.cardDishes.length}}">
+          <view class="order-divider"></view>
+          <view class="dish-heading hand-title">{{orderCard.dishHeading}}</view>
+          <view class="dish-list">
+            <view
+              wx:for="{{orderCard.cardDishes}}"
+              wx:for-item="dish"
+              wx:key="*this"
+              class="dish-item {{orderCard.cardDishes.length % 2 === 1 && index === orderCard.cardDishes.length - 1 ? 'wide' : ''}}"
+            >
+              <text class="dish-index">0{{index + 1}}</text>
+              <text class="dish-name">{{dish}}</text>
+            </view>
+          </view>
+        </block>
+        <view class="review-heading hand-title">我的一句话</view>
+        <text class="order-review">{{orderCard.cardReview}}</text>
+        <view wx:if="{{orderCard.pitfall || orderCard.reservationDisplay}}" class="order-notes">
+          <view wx:if="{{orderCard.pitfall}}" class="order-note">
+            <text class="note-label">避雷</text>
+            <text>{{orderCard.pitfall}}</text>
+          </view>
+          <view wx:if="{{orderCard.reservationDisplay}}" class="order-note">
+            <text class="note-label">订位</text>
+            <text>{{orderCard.reservationDisplay}}</text>
+          </view>
+        </view>
+        <view
+          class="order-address-row"
+          data-value="{{orderCard.address}}"
+          data-label="地址"
+          bindlongpress="copyText"
+        >
+          <text class="order-address">{{orderCard.address}}</text>
+          <button class="copy-icon-button" data-value="{{orderCard.address}}" data-label="地址" bindtap="copyText" aria-label="复制地址">
+            <view class="copy-glyph"><view class="copy-back"></view><view class="copy-front"></view></view>
+          </button>
+        </view>
+      </view>
+      <view class="order-actions" catchtap="noop">
+        <button class="order-action save" bindtap="saveOrderCard" disabled="{{cardRendering}}">{{cardRendering ? '正在生成…' : '保存图片'}}</button>
+      </view>
+    </view>
+  </view>
+
+  <canvas canvas-id="orderCardCanvas" class="share-canvas"></canvas>
 
   <button class="change-batch" bindtap="changeBatch">换一批 <text>→</text></button>
 

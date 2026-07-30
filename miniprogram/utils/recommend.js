@@ -99,14 +99,14 @@ function describeSelection(selection) {
     region = regions.length <= 2 ? regions.join("、") : `${regions.slice(0, 2).join("、")}等${regions.length}个片区`;
   }
   const judgments = {
-    date: "在舒服的氛围里慢慢吃、慢慢聊。",
-    guest: "有面子但不端着，让客人舒服，也让你放心。",
+    date: "在舒服的氛围里慢慢吃慢慢聊。",
+    guest: "不管关系远近都不会失礼。",
     friends: "相聚本身就是快乐的一部分。",
     solo: "一个人也值得好好吃的一顿饭。",
-    birthday: "有一点仪式感，为重要的人留下美好回忆。",
-    casual: "环境就那样，但味道对得起这个价。",
-    parents: "口味友好、节奏舒服，爸妈能吃得惯。",
-    talk: "安静、有分寸，适合认真聊一件重要的事。",
+    birthday: "多一点特别，多一点仪式感。",
+    casual: "环境普普，但味道对得起这个价。",
+    parents: "一家人都能自在吃顿饭。",
+    talk: "在安静、克制有分寸的地方聊重要的事。",
     explore: "不设目的地，帮你发现一些值得去试试的地方。"
   };
   return `${occasion}、${people}、${region}——${judgments[selection.occasion] || "这几家比较合适。"}`;

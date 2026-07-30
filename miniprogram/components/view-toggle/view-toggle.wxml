@@ -1,0 +1,14 @@
+<view class="view-toggle" role="group" aria-label="切换餐厅视图">
+  <button
+    class="toggle-item {{value === 'list' ? 'active' : ''}}"
+    data-value="list"
+    bindtap="choose"
+    aria-label="列表视图"
+  >列表</button>
+  <button
+    class="toggle-item {{value === 'map' ? 'active' : ''}} {{mapDisabled ? 'disabled' : ''}}"
+    data-value="map"
+    bindtap="choose"
+    aria-label="地图视图"
+  >地图</button>
+</view>

@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "给你的推荐"
+  "navigationBarTitleText": "给你的推荐",
+  "usingComponents": {
+    "view-toggle": "/components/view-toggle/view-toggle"
+  }
 }

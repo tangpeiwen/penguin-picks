@@ -33,6 +33,7 @@
     "ignoreUploadUnusedFiles": true
   },
   "compileType": "miniprogram",
+  "appid": "wx0f948f8b91ca0137",
   "libVersion": "3.17.0",
   "projectname": "fanju-restaurant-picker",
   "miniprogramRoot": "miniprogram/",
