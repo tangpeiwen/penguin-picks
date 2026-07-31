@@ -11,12 +11,26 @@ from typing import Optional
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "outputs" / "大众点评_合并_带经纬度.csv"
+SOURCE = ROOT / "outputs" / "大众点评_吃过.csv"
 TARGET = ROOT / "miniprogram" / "data" / "restaurants.js"
 
 
 def split_tags(value: str) -> list[str]:
     return [part.strip() for part in re.split(r"[,，、/]", value or "") if part.strip()]
+
+
+REGION_ALIASES = {
+    "衡山路/复兴西路": "衡山复兴",
+    "衡山复兴": "衡山复兴",
+    "古北/虹桥": "古北虹桥",
+    "古北虹桥": "古北虹桥",
+}
+
+
+def mapped_regions(value: str) -> list[str]:
+    """Keep the reviewed 片区 column authoritative; slash can be part of a label."""
+    parts = [part.strip() for part in re.split(r"[,，、]", value or "") if part.strip()]
+    return list(dict.fromkeys(REGION_ALIASES.get(part, part) for part in parts))
 
 
 def split_dish_names(value: str) -> list[str]:
@@ -58,7 +72,11 @@ def building_name(address: str) -> str:
         "港汇恒隆广场", "恒隆广场", "新世纪广场", "上海广场", "广场", "大厦", "商城", "商场",
         "前滩太古里", "太古里", "万象天地", "新天地", "来福士广场", "来福士", "里", "坊",
     )
-    suffix_pattern = "|".join(sorted((re.escape(item) for item in suffixes), key=len, reverse=True))
+    suffix_parts = []
+    for suffix in sorted(suffixes, key=len, reverse=True):
+        # Do not let the generic “里” suffix truncate names such as “嘉里中心”.
+        suffix_parts.append(r"里(?!中心)" if suffix == "里" else re.escape(suffix))
+    suffix_pattern = "|".join(suffix_parts)
     candidates = re.findall(rf"([^0-9A-Za-z\s，,、]{{0,10}}[A-Za-z0-9·一-鿿]{{1,18}}?(?:{suffix_pattern}))", text)
     if not candidates:
         return ""
@@ -75,11 +93,15 @@ def price_range(value: str) -> tuple[int, int]:
         start = int(re.sub(r"\D", "", value) or 0)
         return start, 9999
     numbers = [int(number) for number in re.findall(r"\d+", value)]
-    return (numbers[0], numbers[1]) if len(numbers) >= 2 else (0, 9999)
+    if len(numbers) >= 2:
+        return numbers[0], numbers[1]
+    if len(numbers) == 1:
+        return numbers[0], numbers[0]
+    return 0, 9999
 
 
 def max_people(value: str) -> int:
-    numbers = [int(number) for number in re.findall(r"(\d+)\s*人", value or "")]
+    numbers = [int(number) for number in re.findall(r"\d+", value or "")]
     return max(numbers) if numbers else 6
 
 
@@ -120,33 +142,26 @@ def reservation_display(value: str) -> str:
     return ""
 
 
-def occasions(row: dict[str, str], low: int) -> list[str]:
+def occasions(row: dict[str, str]) -> list[str]:
     source = row.get("场合", "")
-    review = row.get("评价", "")
     tags: list[str] = []
     mapping = {
-        "约会": "date",
-        "好友聚餐": "friends",
-        "朋友聚会": "friends",
-        "一人食": "solo",
-        "家庭聚餐": "parents",
-        "商务": "talk",
+        "约会": ("date",),
+        "请客": ("guest",),
+        "谈事": ("talk",),
+        "好友聚餐": ("friends",),
+        "朋友聚会": ("friends",),
+        "一人食": ("solo",),
+        "家庭聚餐": ("parents",),
+        "生日": ("birthday",),
+        "随便吃吃": ("casual",),
+        # Compatibility for exports saved before 请客 / 谈事 were split.
+        "商务": ("guest", "talk"),
     }
-    for original, normalized in mapping.items():
-        if original in source and normalized not in tags:
-            tags.append(normalized)
-    if any(term in source for term in ("生日", "商务", "家庭聚餐")) or (
-        low >= 200 and any(term in review for term in ("环境好", "包间", "服务", "体面"))
-    ):
-        tags.append("guest")
-    if not tags:
-        if any(term in review for term in ("商务", "环境非常好", "包间")):
-            tags.extend(["talk", "guest"])
-        elif any(term in review for term in ("喝点小酒", "几个人", "聚一聚", "社区餐厅")):
-            tags.append("friends")
-        else:
-            tags.append("browse")
-    return list(dict.fromkeys(tags))
+    for original, normalized_values in mapping.items():
+        if original in source:
+            tags.extend(normalized_values)
+    return list(dict.fromkeys(tags)) or ["browse"]
 
 
 def short_review(value: str) -> str:
@@ -163,21 +178,44 @@ def short_review(value: str) -> str:
     return result + "。"
 
 
-def diet_flags(cuisines: list[str], review: str) -> list[str]:
-    joined = " ".join(cuisines) + " " + (review or "")
+def diet_flags(row: dict[str, str], cuisines: list[str]) -> list[str]:
+    joined = " ".join(
+        [
+            row.get("店名", ""),
+            " ".join(cuisines),
+            row.get("点菜", ""),
+            row.get("评价", ""),
+            row.get("避雷", ""),
+        ]
+    )
+    beef_text = joined.replace("牛蛙", "")
     flags: list[str] = []
     if not any(term in joined for term in ("川菜", "湘菜", "辣", "火锅")):
         flags.append("no-spicy")
-    if not any(term in joined for term in ("海鲜", "潮汕", "宁波", "鱼", "蟹", "虾")):
+    if not any(term in joined for term in ("海鲜", "潮汕", "宁波", "鱼", "蟹", "虾", "贝", "蚝", "螺", "海胆", "海肠")):
         flags.append("no-seafood")
-    if any(term in joined for term in ("素食", "蔬菜", "轻食")):
+    if "牛" not in beef_text:
+        flags.append("no-beef")
+    if any(term in joined.lower() for term in ("素食", "纯素", "全素", "vegan", "vegetarian")):
         flags.append("vegetarian")
     return flags
 
 
 def main() -> None:
     with SOURCE.open("r", encoding="utf-8-sig", newline="") as source:
-        reviewed = [row for row in csv.DictReader(source) if (row.get("评价") or "").strip()]
+        source_rows = [row for row in csv.DictReader(source) if (row.get("评价") or "").strip()]
+
+    reviewed = []
+    seen_ids: set[str] = set()
+    duplicate_count = 0
+    for row in source_rows:
+        restaurant_id = (row.get("店铺ID") or "").strip()
+        if restaurant_id and restaurant_id in seen_ids:
+            duplicate_count += 1
+            continue
+        if restaurant_id:
+            seen_ids.add(restaurant_id)
+        reviewed.append(row)
 
     restaurants = []
     for index, row in enumerate(reviewed, start=1):
@@ -195,7 +233,7 @@ def main() -> None:
             "priceLabel": (row.get("人均") or "价格待确认").strip(),
             "priceMin": low,
             "priceMax": high,
-            "occasions": occasions(row, low),
+            "occasions": occasions(row),
             "maxPeople": max_people(row.get("人数", "")),
             "reservationLevel": reservation_level,
             "reservationLabel": reservation_label,
@@ -206,12 +244,13 @@ def main() -> None:
             "fullReview": (row.get("评价") or "").strip(),
             "district": (row.get("行政区") or "").strip(),
             "region": (row.get("商圈标签") or "").strip(),
+            "areas": mapped_regions(row.get("片区", "")),
             "address": (row.get("地址") or "").strip(),
             "building": building_name(row.get("地址", "")),
             "latitude": latitude,
             "longitude": longitude,
             "star": float(row.get("星级") or 0),
-            "diet": diet_flags(cuisines, row.get("评价", "")),
+            "diet": diet_flags(row, cuisines),
             "url": (row.get("大众点评链接") or "").strip(),
         }
         restaurants.append(restaurant)
@@ -223,7 +262,10 @@ def main() -> None:
         f"module.exports = {payload};\n",
         encoding="utf-8",
     )
-    print(f"Wrote {len(restaurants)} reviewed restaurants to {TARGET.relative_to(ROOT)}")
+    print(
+        f"Wrote {len(restaurants)} reviewed restaurants to {TARGET.relative_to(ROOT)}"
+        f"; skipped {duplicate_count} duplicate shop IDs"
+    )
 
 
 if __name__ == "__main__":

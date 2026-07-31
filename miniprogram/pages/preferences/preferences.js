@@ -1,8 +1,8 @@
 const PEOPLE = [
-  { id: "1", label: "1人", icon: "/assets/icons/people-1-red.png", activeIcon: "/assets/icons/people-1-white.png" },
-  { id: "2", label: "2人", icon: "/assets/icons/people-2-red.png", activeIcon: "/assets/icons/people-2-white.png" },
-  { id: "3-5", label: "3–5人", icon: "/assets/icons/people-4-red.png", activeIcon: "/assets/icons/people-4-white.png" },
-  { id: "6+", label: "6人+", icon: "/assets/icons/people-6-red.png", activeIcon: "/assets/icons/people-6-white.png" }
+  { id: "upto4", label: "4人以内", icon: "/assets/icons/table-4-illustrated.png", activeIcon: "/assets/icons/table-4-illustrated.png" },
+  { id: "5-6", label: "5–6人", icon: "/assets/icons/table-6-illustrated.png", activeIcon: "/assets/icons/table-6-illustrated.png" },
+  { id: "7-8", label: "7–8人", icon: "/assets/icons/table-8-illustrated.png", activeIcon: "/assets/icons/table-8-illustrated.png" },
+  { id: "9+", label: "9人以上", icon: "/assets/icons/table-9-illustrated.png", activeIcon: "/assets/icons/table-9-illustrated.png" }
 ];
 
 const { REGION_OPTIONS } = require("../../config/regions");
@@ -14,8 +14,27 @@ function decorateRegions(selectedRegions) {
   }));
 }
 
+function normalizePeople(value) {
+  if (["upto4", "5-6", "7-8", "9+"].indexOf(value) !== -1) return value;
+  if (value === "3-5" || value === "6+") return "5-6";
+  const count = Number(value);
+  if (!Number.isInteger(count) || count < 1) return "";
+  if (count <= 4) return "upto4";
+  if (count <= 6) return "5-6";
+  if (count <= 8) return "7-8";
+  return "9+";
+}
+
 Page({
-  data: { peopleOptions: PEOPLE, regions: decorateRegions([]), people: "", selectedRegions: [], ready: false },
+  data: {
+    peopleOptions: PEOPLE,
+    regions: decorateRegions([]),
+    people: "",
+    peopleRequired: true,
+    pageTitle: "几个人？ 在哪里？",
+    selectedRegions: [],
+    ready: false
+  },
 
   onLoad() {
     const selection = wx.getStorageSync("selection") || {};
@@ -24,8 +43,12 @@ Page({
       ? selection.regions
       : (selection.region ? [selection.region] : []);
     const selectedRegions = storedRegions.filter((item) => validRegions.indexOf(item) !== -1);
+    const peopleRequired = ["solo", "date"].indexOf(selection.occasion) === -1;
+    const automaticPeople = selection.occasion === "solo" ? "1" : "2";
     this.setData({
-      people: selection.people || "",
+      people: peopleRequired ? normalizePeople(selection.people) : automaticPeople,
+      peopleRequired,
+      pageTitle: peopleRequired ? "几个人？ 在哪里？" : "想去哪里？",
       selectedRegions,
       regions: decorateRegions(selectedRegions)
     });
@@ -58,7 +81,9 @@ Page({
     this.setData({ selectedRegions, regions: decorateRegions(selectedRegions) }, () => this.updateReady());
   },
 
-  updateReady() { this.setData({ ready: Boolean(this.data.people && this.data.selectedRegions.length) }); },
+  updateReady() {
+    this.setData({ ready: Boolean((!this.data.peopleRequired || this.data.people) && this.data.selectedRegions.length) });
+  },
 
   submit() {
     if (!this.data.ready) return;

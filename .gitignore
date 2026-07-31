@@ -15,6 +15,9 @@ miniprogram_npm/
 # Generated data and temporary assets
 outputs/
 tmp/
+/大众点评_吃过.csv
+/大众点评_合并_带经纬度.csv
+/大众点评完整评价_已改写.csv
 
 # External source checkouts
 third_party/

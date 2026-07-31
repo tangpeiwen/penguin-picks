@@ -1,7 +1,10 @@
-const DISH_COUNTS = { "1": 3, "2": 4, "3-5": 6, "6+": 7 };
-
 function dishCountForPeople(people) {
-  return DISH_COUNTS[people] || 4;
+  const groups = { upto4: 4, "5-6": 6, "7-8": 8, "9+": 9, "3-5": 5, "6+": 6 };
+  const count = groups[people] || Number(people) || 2;
+  if (count <= 1) return 3;
+  if (count <= 2) return 4;
+  if (count <= 5) return 6;
+  return 7;
 }
 
 function orderDishData(restaurant, people) {
@@ -13,4 +16,4 @@ function orderDishData(restaurant, people) {
   };
 }
 
-module.exports = { DISH_COUNTS, dishCountForPeople, orderDishData };
+module.exports = { dishCountForPeople, orderDishData };

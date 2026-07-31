@@ -4,11 +4,14 @@
     data-value="list"
     bindtap="choose"
     aria-label="列表视图"
-  >列表</button>
+    aria-pressed="{{value === 'list'}}"
+  ><view class="list-glyph" aria-hidden="true"><view></view><view></view><view></view></view><text>列表</text></button>
   <button
     class="toggle-item {{value === 'map' ? 'active' : ''}} {{mapDisabled ? 'disabled' : ''}}"
     data-value="map"
     bindtap="choose"
     aria-label="地图视图"
-  >地图</button>
+    aria-pressed="{{value === 'map'}}"
+    aria-disabled="{{mapDisabled}}"
+  ><image class="map-glyph" src="{{value === 'map' ? '/assets/icons/location-pin-white.png' : '/assets/icons/location-pin-red.png'}}" mode="aspectFit"></image><text>地图</text></button>
 </view>

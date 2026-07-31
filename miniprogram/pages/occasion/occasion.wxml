@@ -2,9 +2,15 @@
   <image class="mascot" src="/assets/icons/mascot-red.png" mode="aspectFit" aria-label="饭碗小厨师"></image>
 
   <view class="hero fade-up">
-    <text class="eyebrow">帮你挑一家，刚刚好的餐厅</text>
-    <view class="hand-title title">这顿饭，\n是什么场合？</view>
-    <view class="blue-stroke"></view>
+    <view class="brand-lockup">
+      <text class="brand-en">PEIWEN PICKS</text>
+      <text class="brand-cn hand-title">吃饭也要做功课</text>
+    </view>
+    <view class="hand-title title">
+      <view class="title-first-line">这顿饭，<view class="blue-stroke"></view></view>
+      <view class="title-second-line">是个什么情况？</view>
+    </view>
+    <text class="hero-note">从我吃过的餐厅里，挑一家适合这顿饭的。</text>
   </view>
 
   <view class="occasion-grid primary-grid fade-up">
@@ -16,7 +22,7 @@
       bindtap="chooseOccasion"
       hover-class="card-pressed"
     >
-      <image class="occasion-icon" src="{{item.icon}}" mode="aspectFit"></image>
+      <image class="occasion-icon occasion-icon-{{item.id}}" src="{{item.icon}}" mode="aspectFit"></image>
       <text class="occasion-label">{{item.label}}</text>
     </button>
   </view>
@@ -27,13 +33,13 @@
     <button
       wx:for="{{secondaryOptions}}"
       wx:key="id"
-      class="occasion-card secondary-card paper-card {{item.tone}} {{selected === item.id ? 'selected' : ''}}"
+      class="occasion-card paper-card {{item.tone}} {{selected === item.id ? 'selected' : ''}}"
       data-id="{{item.id}}"
       bindtap="chooseOccasion"
       hover-class="card-pressed"
     >
-      <image class="occasion-icon secondary-icon" src="{{item.icon}}" mode="aspectFit"></image>
-      <text class="occasion-label secondary-label {{item.compact ? 'compact' : ''}}">{{item.label}}</text>
+      <image class="occasion-icon occasion-icon-{{item.id}}" src="{{item.icon}}" mode="aspectFit"></image>
+      <text class="occasion-label">{{item.label}}</text>
     </button>
   </view>
 

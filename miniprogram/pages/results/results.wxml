@@ -1,7 +1,10 @@
-<view class="screen results-screen">
+<view class="screen results-screen" style="padding-top: {{contentTop}}px;">
   <view class="topbar">
-    <button class="back" bindtap="goBack" aria-label="返回">←</button>
-    <image class="mini-mascot" src="/assets/icons/mascot-red.png" mode="aspectFit"></image>
+    <view class="nav-capsule">
+      <button class="back" bindtap="goBack" aria-label="返回上一页"><view class="back-glyph"></view></button>
+      <view class="nav-divider"></view>
+      <button class="home" bindtap="goHome" aria-label="回到主页">主页</button>
+    </view>
     <view-toggle
       value="{{viewMode}}"
       map-disabled="{{mapDisabled}}"
@@ -10,17 +13,30 @@
     ></view-toggle>
   </view>
 
-  <view class="summary hand-title fade-up">{{summary}}</view>
+  <view class="summary fade-up">
+    <view class="summary-occasion hand-title">{{summary.occasion}}</view>
+    <view class="summary-details hand-title">{{summary.details}}</view>
+    <view class="summary-judgment hand-title">「{{summary.judgment}}」</view>
+  </view>
 
-  <scroll-view class="filter-scroll" scroll-x="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
-    <view class="filters">
-      <button class="filter-chip {{filters.cuisine ? 'active' : ''}}" data-key="cuisine" bindtap="openFilter">{{filterLabels.cuisine}}⌄</button>
-      <button class="filter-chip {{filters.price ? 'active' : ''}}" data-key="price" bindtap="openFilter">{{filterLabels.price}}⌄</button>
-      <button class="filter-chip {{filters.diet ? 'active' : ''}}" data-key="diet" bindtap="openFilter">{{filterLabels.diet}}⌄</button>
-    </view>
-  </scroll-view>
+  <view class="filters">
+    <button class="filter-chip {{filters.cuisine.length ? 'active' : ''}}" data-key="cuisine" bindtap="openFilter" aria-expanded="{{activeFilter === 'cuisine'}}">
+      <text class="filter-label">{{filterLabels.cuisine}}</text><view class="filter-chevron {{activeFilter === 'cuisine' ? 'open' : ''}}"></view>
+    </button>
+    <button class="filter-chip {{filters.price.length ? 'active' : ''}}" data-key="price" bindtap="openFilter" aria-expanded="{{activeFilter === 'price'}}">
+      <text class="filter-label">{{filterLabels.price}}</text><view class="filter-chevron {{activeFilter === 'price' ? 'open' : ''}}"></view>
+    </button>
+    <button class="filter-chip {{filters.diet.length ? 'active' : ''}}" data-key="diet" bindtap="openFilter" aria-expanded="{{activeFilter === 'diet'}}">
+      <text class="filter-label">{{filterLabels.diet}}</text><view class="filter-chevron {{activeFilter === 'diet' ? 'open' : ''}}"></view>
+    </button>
+  </view>
 
-  <view wx:if="{{viewMode === 'list'}}" class="result-list fade-up">
+  <view wx:if="{{loading}}" class="loading-state fade-up">
+    <image class="loading-mascot" src="/assets/icons/mascot-red.png" mode="aspectFit"></image>
+    <text class="loading-copy hand-title">让我想想…</text>
+  </view>
+
+  <view wx:elif="{{viewMode === 'list'}}" class="result-list fade-up">
     <view
       wx:for="{{results}}"
       wx:key="id"
@@ -39,27 +55,26 @@
             <text class="restaurant-name hand-title">{{item.name}}</text>
           </view>
           <view class="primary-meta">
-            <text class="cuisine">{{item.cuisineLabel}}</text>
-            <text class="dot">·</text>
+            <text class="cuisine hand-title">{{item.cuisineLabel}}</text>
             <text class="price">{{item.priceDisplay}}</text>
           </view>
           <view class="location-row">
             <text class="location-line">{{item.locationSummary}}</text>
             <button
-              class="navigate-icon"
+              class="navigate-button"
               data-id="{{item.id}}"
               catchtap="openLocation"
               aria-label="打开{{item.name}}的地图导航"
-            ><image src="/assets/icons/location-red.png" mode="aspectFit"></image></button>
+            ><image class="navigate-icon" src="/assets/icons/location-pin-red.png" mode="aspectFit"></image></button>
           </view>
-          <text class="restaurant-review">「{{item.review}}」</text>
+          <text class="restaurant-review">{{item.review}}</text>
           <text wx:if="{{item.reservationDisplay}}" class="reservation {{item.reservationLevel}}">{{item.reservationDisplay}}</text>
         </view>
       </view>
     </view>
     <view wx:if="{{!results.length}}" class="empty paper-card">
       <view class="empty-face">⌣</view>
-      <text>这组条件有点难凑，试试少选一个条件。</text>
+      <text>这个组合我还真没吃到过</text>
     </view>
   </view>
 
@@ -75,13 +90,13 @@
       enable-zoom="{{true}}"
       enable-scroll="{{true}}"
     ></map>
-    <view class="map-note paper-card">点标记看店名，再点店名导航</view>
+    <view class="map-note paper-card">当前筛选共 {{mapMarkers.length}} 家 · 点标记看店名，再点店名导航</view>
   </view>
 
   <view wx:if="{{orderCard}}" class="order-mask" bindtap="closeOrderCard">
     <view class="order-modal">
       <view class="order-card" catchtap="noop">
-        <text class="order-eyebrow">PENGUIN PICKS · 点菜卡</text>
+        <text class="order-eyebrow">PEIWEN PICKS · 点菜卡</text>
         <view
           class="order-name-row"
           data-value="{{orderCard.name}}"
@@ -147,19 +162,25 @@
   <view wx:if="{{activeFilter}}" class="sheet-mask" bindtap="closeFilter">
     <view class="filter-sheet" catchtap="noop">
       <view class="sheet-handle"></view>
-      <view class="sheet-title hand-title">{{activeTitle}}</view>
-      <text wx:if="{{activeFilter === 'diet'}}" class="sheet-note">仅按现有菜系信息初筛；涉及过敏原，请订位时再和餐厅确认。</text>
+      <view class="sheet-head">
+        <view class="sheet-title hand-title">{{activeTitle}}</view>
+        <button class="sheet-close" bindtap="closeFilter" aria-label="关闭筛选">×</button>
+      </view>
+      <text wx:if="{{activeFilter === 'diet'}}" class="sheet-note">仅按现有餐厅信息初筛；涉及过敏原，请订位时再和餐厅确认。</text>
       <view class="option-list">
         <button
           wx:for="{{activeOptions}}"
           wx:key="id"
-          class="option {{filters[activeFilter] === item.id ? 'selected' : ''}}"
+          class="option {{item.full ? 'full' : ''}} {{item.selected ? 'selected' : ''}}"
           data-value="{{item.id}}"
-          data-label="{{item.label}}"
-          bindtap="chooseFilter"
-        >{{item.label}}<text wx:if="{{filters[activeFilter] === item.id}}">✓</text></button>
+          bindtap="toggleFilterOption"
+          aria-pressed="{{item.selected}}"
+        >{{item.label}}</button>
       </view>
-      <button class="clear" bindtap="clearFilter">不限</button>
+      <view class="filter-actions">
+        <button class="filter-reset" bindtap="resetDraftFilter">重置</button>
+        <button class="filter-apply" bindtap="applyFilter">查看结果{{draftValues.length ? ' · ' + draftValues.length : ''}}</button>
+      </view>
     </view>
   </view>
 </view>

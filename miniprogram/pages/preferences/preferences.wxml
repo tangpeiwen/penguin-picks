@@ -1,24 +1,25 @@
 <view class="screen preferences-screen">
   <view class="topbar">
     <button class="back" bindtap="goBack" aria-label="返回">←</button>
-    <text class="step">2 / 2</text>
+    <text class="step">最后一步</text>
     <view class="top-spacer"></view>
   </view>
 
-  <view class="fade-up">
-    <view class="hand-title page-title">几个人？想在哪一带吃？</view>
+  <view class="page-heading fade-up">
+    <view class="hand-title page-title">{{pageTitle}}</view>
     <view class="blue-stroke"></view>
   </view>
 
-  <view class="section people-section fade-up">
-    <view class="section-title">人数</view>
-    <view class="people-row">
+  <view wx:if="{{peopleRequired}}" class="section people-section fade-up">
+    <view class="section-title">先选人数</view>
+    <view class="people-grid">
       <button
         wx:for="{{peopleOptions}}"
         wx:key="id"
         class="people-chip paper-card {{people === item.id ? 'selected' : ''}}"
         data-id="{{item.id}}"
         bindtap="choosePeople"
+        aria-pressed="{{people === item.id}}"
       >
         <image class="people-icon" src="{{people === item.id ? item.activeIcon : item.icon}}" mode="aspectFit"></image>
         <text>{{item.label}}</text>
@@ -26,10 +27,10 @@
     </view>
   </view>
 
-  <view class="divider"></view>
+  <view wx:if="{{peopleRequired}}" class="divider"></view>
 
-  <view class="section fade-up region-section">
-    <view class="section-title">片区 <text class="section-hint">可多选，按方便到达的一带来选</text></view>
+  <view class="section fade-up region-section {{peopleRequired ? '' : 'region-section-only'}}">
+    <view class="section-title">{{peopleRequired ? '再选片区' : '选片区'}} <text class="section-hint">可多选，按方便到达的一带来选</text></view>
     <view class="region-grid">
       <button
         wx:for="{{regions}}"
@@ -37,9 +38,10 @@
         class="region-chip paper-card {{item.selected ? 'selected' : ''}}"
         data-region="{{item.id}}"
         bindtap="chooseRegion"
-      >{{item.label}}<text wx:if="{{item.selected}}" class="check">✓</text></button>
+        aria-pressed="{{item.selected}}"
+      >{{item.label}}</button>
     </view>
   </view>
 
-  <button class="submit {{ready ? 'ready' : ''}}" bindtap="submit" disabled="{{!ready}}">看看推荐</button>
+  <button class="submit {{ready ? 'ready' : ''}}" bindtap="submit" disabled="{{!ready}}" hover-class="submit-pressed">看看推荐</button>
 </view>

@@ -1,51 +1,81 @@
 const assert = require("node:assert/strict");
 const restaurants = require("../miniprogram/data/restaurants");
-const { recommend, describeSelection, regionMatches } = require("../miniprogram/utils/recommend");
+const {
+  recommend,
+  recommendAll,
+  describeSelection,
+  regionMatches,
+  cuisineGroup,
+  defaultPriceFilter,
+  occasionFits,
+  requiredPeople
+} = require("../miniprogram/utils/recommend");
 const { dishCountForPeople, orderDishData } = require("../miniprogram/utils/order-card");
 const { REGION_OPTIONS } = require("../miniprogram/config/regions");
 
-assert.equal(restaurants.length, 87, "demo dataset should contain the reviewed rows from the latest geocoded source");
+assert.equal(restaurants.length, 113, "demo dataset should contain the unique reviewed shops from 大众点评_吃过.csv");
+assert.equal(new Set(restaurants.map((item) => item.id)).size, restaurants.length, "restaurant IDs must be unique for list keys and map markers");
 assert.ok(restaurants.every((item) => item.name && item.review && item.priceLabel));
 assert.ok(restaurants.every((item) => Array.isArray(item.dishes) && item.dishes.length <= 7));
-assert.equal(restaurants.filter((item) => item.dishes.length).length, 69);
+assert.equal(restaurants.filter((item) => item.dishes.length).length, 90);
 const forbiddenDishFallbacks = ["问店员：", "当日招牌", "时令菜", "现场推荐", "按食量再加"];
 assert.ok(restaurants.every((item) => item.dishes.every((dish) =>
   forbiddenDishFallbacks.every((fallback) => dish.indexOf(fallback) === -1)
 )), "dish data must not contain generated fallback advice");
 assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "pitfall")));
 assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "reservationDisplay")));
-assert.equal(restaurants.filter((item) => item.reservationDisplay).length, 9);
+assert.equal(restaurants.filter((item) => item.reservationDisplay).length, 11);
 assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "latitude") && Object.prototype.hasOwnProperty.call(item, "longitude")));
 assert.ok(restaurants.every((item) => Number.isFinite(item.latitude) && item.latitude > 30 && item.latitude < 32.5));
 assert.ok(restaurants.every((item) => Number.isFinite(item.longitude) && item.longitude > 120 && item.longitude < 123));
 assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "building")));
+assert.ok(restaurants.every((item) => Array.isArray(item.areas) && item.areas.length), "reviewed 片区 should be present on every restaurant");
 assert.ok(restaurants.filter((item) => item.building).length >= 20, "building summaries should be extracted where available");
 assert.ok(restaurants.every((item) => item.building.length <= 20));
+assert.ok(restaurants.every((item) => ["中餐", "日料", "西餐", "火锅", "东南亚", "韩餐"].includes(cuisineGroup(item))));
+assert.equal(restaurants.filter((item) => item.diet.includes("vegetarian")).length, 4, "vegetarian should require an explicit signal");
+assert.deepEqual(defaultPriceFilter({ occasion: "casual" }), ["0-100", "100-200"]);
+assert.deepEqual(defaultPriceFilter({ occasion: "guest" }), []);
+assert.deepEqual(defaultPriceFilter({ occasion: "date" }), []);
 
 assert.deepEqual(
-  ["1", "2", "3-5", "6+"].map(dishCountForPeople),
-  [3, 4, 6, 7],
+  ["1", "2", "upto4", "5-6", "7-8", "9+"].map(dishCountForPeople),
+  [3, 4, 6, 7, 7, 7],
   "dish count should follow the selected party size"
 );
 const dishFixture = { dishes: ["一", "二", "三", "四", "五", "六", "七"] };
-assert.equal(orderDishData(dishFixture, "3-5").cardDishes.length, 6);
-assert.equal(orderDishData(dishFixture, "3-5").dishHeading, "点菜参考");
-assert.equal(orderDishData({ dishes: ["一"] }, "6+").cardDishes.length, 1);
+assert.equal(orderDishData(dishFixture, "upto4").cardDishes.length, 6);
+assert.equal(orderDishData(dishFixture, "upto4").dishHeading, "点菜参考");
+assert.equal(orderDishData({ dishes: ["一"] }, "9+").cardDishes.length, 1);
 assert.equal(orderDishData({ dishes: [] }, "2").dishHeading, "");
 
 const occasions = ["date", "guest", "friends", "parents", "birthday", "talk", "solo", "casual", "explore"];
-const peopleOptions = ["1", "2", "3-5", "6+"];
+const peopleOptions = ["upto4", "5-6", "7-8", "9+"];
 const regions = REGION_OPTIONS.map((item) => item.id);
-const requiredPeople = { "1": 1, "2": 2, "3-5": 5, "6+": 6 };
+assert.ok(restaurants.every((item) => item.areas.every((area) => regions.includes(area))), "CSV 片区 values must map to visible region IDs");
+assert.equal(requiredPeople("3-5"), 5, "legacy saved selections should remain readable");
+assert.equal(requiredPeople("6+"), 6, "legacy saved selections should remain readable");
+
+const allUnfiltered = recommendAll(
+  { occasion: "explore", people: "", regions: ["不限区域"] },
+  { cuisine: [], price: [], diet: [] }
+);
+assert.equal(allUnfiltered.length, restaurants.length, "map source should contain every current filter match without list pagination");
+assert.equal(recommend(
+  { occasion: "explore", people: "", regions: ["不限区域"] },
+  { cuisine: [], price: [], diet: [] },
+  0
+).length, 3, "list source should remain capped at three restaurants");
 
 for (const occasion of occasions) {
   for (const people of peopleOptions) {
     for (const region of regions) {
       const selection = { occasion, people, regions: [region] };
       const rows = recommend(selection, { cuisine: "", price: "", diet: "" }, 0);
-      assert.ok(rows.length >= 1 && rows.length <= 4, `${JSON.stringify(selection)} should return 1–4 honest matches`);
+      assert.ok(rows.length <= 3, `${JSON.stringify(selection)} should return at most 3 honest matches`);
       assert.equal(new Set(rows.map((row) => row.id)).size, rows.length, "results must be unique");
-      assert.ok(rows.every((row) => row.maxPeople >= requiredPeople[people]), "capacity should fit");
+      assert.ok(rows.every((row) => row.maxPeople >= requiredPeople(people)), "capacity should fit");
+      assert.ok(rows.every((row) => occasionFits(row, occasion)), "occasion must be a hard match");
       if (region !== "不限区域") {
         assert.ok(rows.every((row) => regionMatches(row, region)), "results should stay inside selected regions");
       }
@@ -64,8 +94,33 @@ assert.ok(restaurants.every((restaurant) => regions
   .filter((item) => item !== "不限区域")
   .some((region) => regionMatches(restaurant, region))), "every restaurant should belong to at least one visible region");
 
-const multiRegionSelection = { occasion: "friends", people: "3-5", regions: ["静安寺", "南京西路"] };
+const jingAn50 = restaurants.find((restaurant) => restaurant.name === "静安50");
+assert.ok(jingAn50 && regionMatches(jingAn50, "静安寺"), "静安50 on 愚园东路 should belong to 静安寺");
+
+const orientalHouse = restaurants.find((restaurant) => restaurant.id === "l1pFxEUMxhYPVMz7");
+assert.equal(orientalHouse && orientalHouse.building, "嘉里中心", "generic 里 matching must not truncate 嘉里中心");
+
+const bellocoXinZha = restaurants.find((restaurant) => restaurant.id === "l1RrUsweyvuUY3yr");
+assert.ok(bellocoXinZha && regionMatches(bellocoXinZha, "其他区域"), "reviewed CSV 片区 should override keyword inference");
+assert.equal(regionMatches(bellocoXinZha, "南京西路"), false, "manual 片区 should not be expanded by old keyword rules");
+
+const multiRegionSelection = { occasion: "friends", people: "upto4", regions: ["静安寺", "南京西路"] };
 assert.ok(describeSelection(multiRegionSelection).includes("静安寺、南京西路"));
+assert.ok(!describeSelection(multiRegionSelection).includes("——"));
+
+const pho = restaurants.find((restaurant) => restaurant.id === "G5bsxgt7wZHxPlhS");
+assert.deepEqual(pho.occasions, ["solo", "casual"]);
+assert.equal(occasionFits(pho, "date"), false);
+assert.equal(occasionFits(pho, "solo"), true);
+
+const guestOnly = restaurants.filter((restaurant) => restaurant.occasions.includes("guest") && !restaurant.occasions.includes("talk"));
+const talkOnly = restaurants.filter((restaurant) => restaurant.occasions.includes("talk") && !restaurant.occasions.includes("guest"));
+const dateOnly = restaurants.filter((restaurant) => restaurant.occasions.includes("date") && !restaurant.occasions.includes("talk"));
+assert.equal(restaurants.filter((restaurant) => restaurant.occasions.includes("guest")).length, 40);
+assert.equal(restaurants.filter((restaurant) => restaurant.occasions.includes("talk")).length, 30);
+assert.ok(guestOnly.length > 0 && guestOnly.every((restaurant) => !occasionFits(restaurant, "talk")), "请客 should not imply 谈事");
+assert.ok(talkOnly.length > 0 && talkOnly.every((restaurant) => !occasionFits(restaurant, "guest")), "谈事 should not imply 请客");
+assert.ok(dateOnly.length > 0 && dateOnly.every((restaurant) => !occasionFits(restaurant, "talk")), "约会 should not imply 谈事");
 
 const japanese = recommend(
   { occasion: "date", people: "2", regions: ["静安寺"] },
@@ -73,14 +128,114 @@ const japanese = recommend(
   0
 );
 assert.ok(japanese.length >= 1);
-assert.ok(japanese.every((row) => row.cuisines.includes("日料")));
+assert.ok(japanese.every((row) => cuisineGroup(row) === "日料"));
+
+for (const cuisine of ["中餐", "日料", "西餐", "火锅", "东南亚", "韩餐"]) {
+  const rows = recommend(
+    { occasion: "explore", people: "", regions: ["不限区域"] },
+    { cuisine, price: "", diet: "" },
+    0
+  );
+  assert.ok(rows.length >= 1, `${cuisine} should have at least one restaurant`);
+  assert.ok(rows.every((row) => cuisineGroup(row) === cuisine));
+}
+
+const multipleCuisines = recommend(
+  { occasion: "explore", people: "", regions: ["不限区域"] },
+  { cuisine: ["日料", "韩餐"], price: [], diet: [] },
+  0
+);
+assert.ok(multipleCuisines.length >= 1);
+assert.ok(multipleCuisines.every((row) => ["日料", "韩餐"].includes(cuisineGroup(row))));
+
+const multipleDiets = recommend(
+  { occasion: "explore", people: "", regions: ["不限区域"] },
+  { cuisine: [], price: [], diet: ["no-spicy", "no-beef"] },
+  0
+);
+assert.ok(multipleDiets.length >= 1);
+assert.ok(multipleDiets.every((row) => row.diet.includes("no-spicy") && row.diet.includes("no-beef")));
 
 const budget = recommend(
-  { occasion: "friends", people: "3-5", regions: ["前滩"] },
-  { cuisine: "", price: "0-200", diet: "" },
+  { occasion: "friends", people: "upto4", regions: ["前滩"] },
+  { cuisine: "", price: ["0-100", "100-200"], diet: "" },
   0
 );
 assert.ok(budget.length >= 1);
 assert.ok(budget.every((row) => row.priceMin < 200));
 
-console.log("Recommendation checks passed for 576 core combinations, multi-region selection, and representative filters.");
+[
+  ["0-100", (row) => row.priceMin < 100 && row.priceMax > 0],
+  ["100-200", (row) => row.priceMin < 200 && row.priceMax > 100],
+  ["200-300", (row) => row.priceMin < 300 && row.priceMax > 200],
+  ["300-500", (row) => row.priceMin < 500 && row.priceMax > 300],
+  ["500-700", (row) => row.priceMin < 700 && row.priceMax > 500],
+  ["700-9999", (row) => row.priceMin < 9999 && row.priceMax > 700]
+].forEach(([price, matches]) => {
+  const priced = recommend(
+    { occasion: "explore", people: "", regions: ["不限区域"] },
+    { cuisine: [], price: [price], diet: [] },
+    0
+  );
+  assert.ok(priced.length >= 1, `${price} should have at least one restaurant`);
+  assert.ok(priced.every(matches), `${price} should not leak into adjacent price ranges`);
+});
+
+const noBeef = recommend(
+  { occasion: "explore", people: "", regions: ["不限区域"] },
+  { cuisine: "", price: "", diet: "no-beef" },
+  0
+);
+assert.ok(noBeef.length >= 1);
+assert.ok(noBeef.every((row) => row.diet.includes("no-beef")));
+
+const ordinaryOccasion = recommend(
+  { occasion: "date", people: "2", regions: ["不限区域"] },
+  { cuisine: "", price: "", diet: "" },
+  0
+);
+assert.ok(ordinaryOccasion.every((row) => row.priceMin < 300), "ordinary occasions should show the under-300 group first");
+
+const bund = recommend(
+  { occasion: "date", people: "2", regions: ["外滩"] },
+  { cuisine: "", price: "", diet: "" },
+  0
+);
+const bundPrices = bund.map((row) => row.priceMin);
+const firstHigherPrice = bundPrices.findIndex((price) => price >= 300);
+if (firstHigherPrice !== -1) {
+  assert.ok(bundPrices.slice(0, firstHigherPrice).every((price) => price < 300), "under-300 results should come first");
+  assert.deepEqual(
+    bundPrices.slice(firstHigherPrice),
+    [...bundPrices.slice(firstHigherPrice)].sort((a, b) => a - b),
+    "higher-price results should then be ascending"
+  );
+}
+
+const fitsFour = recommendAll(
+  { occasion: "explore", people: "upto4", regions: ["不限区域"] },
+  { cuisine: [], price: [], diet: [] }
+);
+const fitsFive = recommendAll(
+  { occasion: "explore", people: "5-6", regions: ["不限区域"] },
+  { cuisine: [], price: [], diet: [] }
+);
+assert.ok(fitsFour.some((row) => row.maxPeople === 4), "four people should include restaurants capped at four");
+assert.ok(fitsFour.every((row) => row.maxPeople >= 4));
+assert.ok(fitsFive.every((row) => row.maxPeople >= 5), "five people should exclude restaurants capped at four");
+assert.ok(!fitsFive.some((row) => row.maxPeople === 4));
+
+const fitsSeven = recommendAll(
+  { occasion: "explore", people: "7-8", regions: ["不限区域"] },
+  { cuisine: [], price: [], diet: [] }
+);
+const fitsNine = recommendAll(
+  { occasion: "explore", people: "9+", regions: ["不限区域"] },
+  { cuisine: [], price: [], diet: [] }
+);
+assert.ok(fitsSeven.some((row) => row.maxPeople === 8));
+assert.ok(fitsSeven.every((row) => row.maxPeople >= 7));
+assert.ok(fitsNine.some((row) => row.maxPeople === 10));
+assert.ok(fitsNine.every((row) => row.maxPeople >= 9));
+
+console.log(`Recommendation checks passed for ${occasions.length * peopleOptions.length * regions.length} core combinations, four capacity groups, multi-region selection, and representative filters.`);

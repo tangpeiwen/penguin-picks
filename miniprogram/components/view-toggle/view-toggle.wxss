@@ -1,25 +1,32 @@
 .view-toggle {
   display: flex;
-  width: 166rpx;
-  height: 58rpx;
-  padding: 4rpx;
+  width: 236rpx;
+  height: 100rpx;
+  padding: 6rpx;
   box-sizing: border-box;
   border: 2rpx solid #d5c4b2;
-  border-radius: 31rpx 27rpx 30rpx 28rpx;
-  background: rgba(255, 253, 248, .9);
+  border-radius: 52rpx;
+  background: rgba(255, 253, 248, .96);
+  box-shadow: 0 7rpx 18rpx rgba(78, 52, 41, .07);
 }
 
 .toggle-item {
+  display: flex;
   flex: 1;
   min-width: 0;
-  height: 46rpx;
+  height: 88rpx;
   margin: 0;
   padding: 0;
-  border-radius: 24rpx;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  border-radius: 44rpx;
   background: transparent;
   color: #806e67;
-  font-size: 21rpx;
-  line-height: 46rpx;
+  font-family: var(--font-hand);
+  font-size: 29rpx;
+  line-height: 1;
+  transition: color 160ms ease, background-color 160ms ease;
 }
 
 .toggle-item.active {
@@ -30,3 +37,5 @@
 .toggle-item.disabled {
   opacity: .48;
 }
+
+.list-glyph { display: grid; gap: 4rpx; width: 23rpx; }.list-glyph view { width: 23rpx; height: 3rpx; border-radius: 4rpx; background: currentColor; }.map-glyph { width: 27rpx; height: 27rpx; }

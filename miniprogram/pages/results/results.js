@@ -1,30 +1,37 @@
-const { recommend, describeSelection } = require("../../utils/recommend");
+const { recommend, recommendAll, describeSelectionParts, defaultPriceFilter } = require("../../utils/recommend");
 const { orderDishData } = require("../../utils/order-card");
+const { REGION_OPTIONS } = require("../../config/regions");
 
 const FILTER_OPTIONS = {
   cuisine: [
+    { id: "中餐", label: "中餐" },
     { id: "日料", label: "日料" },
-    { id: "本帮菜", label: "本帮菜" },
-    { id: "创意菜", label: "创意菜" },
-    { id: "潮汕菜", label: "潮汕菜" },
-    { id: "粤菜", label: "粤菜" }
+    { id: "西餐", label: "西餐" },
+    { id: "火锅", label: "火锅" },
+    { id: "东南亚", label: "东南亚" },
+    { id: "韩餐", label: "韩餐" }
   ],
   price: [
-    { id: "0-200", label: "¥200 以下" },
+    { id: "any", label: "不限", full: true },
+    { id: "0-100", label: "＜¥100" },
+    { id: "100-200", label: "¥100–200" },
     { id: "200-300", label: "¥200–300" },
     { id: "300-500", label: "¥300–500" },
-    { id: "500-9999", label: "¥500 以上" }
+    { id: "500-700", label: "¥500–700" },
+    { id: "700-9999", label: "¥700 以上" }
   ],
   diet: [
     { id: "no-spicy", label: "不吃辣" },
     { id: "no-seafood", label: "不吃海鲜" },
-    { id: "vegetarian", label: "需要素食选择" }
+    { id: "no-beef", label: "不吃牛肉" },
+    { id: "vegetarian", label: "素食" }
   ]
 };
 
 const FILTER_LABELS = { cuisine: "菜系", price: "人均", diet: "忌口" };
 const CARD_WIDTH = 630;
 const CARD_HEIGHT = 1000;
+const LOADING_DELAY = 280;
 
 function roundRect(context, x, y, width, height, radius) {
   context.beginPath();
@@ -69,22 +76,54 @@ function validCoordinate(item) {
 }
 
 function locationSummary(item) {
-  const region = (item.region || item.district || "上海").split(/[、,，/]/)[0];
+  const area = Array.isArray(item.areas) && item.areas.length ? item.areas[0] : "";
+  const areaOption = REGION_OPTIONS.find((option) => option.id === area);
+  const region = (areaOption ? areaOption.label : (item.region || item.district || "上海")).split(/[、,，]/)[0];
   const building = item.building || "";
   if (!building || region.indexOf(building) !== -1 || building.indexOf(region) !== -1) return region;
   return `${region} · ${building}`;
 }
 
+function navigationContentTop() {
+  try {
+    if (typeof wx.getMenuButtonBoundingClientRect === "function") {
+      const menuRect = wx.getMenuButtonBoundingClientRect();
+      if (menuRect && Number.isFinite(menuRect.bottom) && menuRect.bottom > 0) return Math.ceil(menuRect.bottom + 10);
+    }
+    const windowInfo = typeof wx.getWindowInfo === "function"
+      ? wx.getWindowInfo()
+      : (typeof wx.getSystemInfoSync === "function" ? wx.getSystemInfoSync() : {});
+    return Math.ceil((windowInfo.statusBarHeight || 24) + 54);
+  } catch (error) {
+    return 78;
+  }
+}
+
+function selectedFilterLabel(key, values) {
+  if (!values.length) return FILTER_LABELS[key];
+  if (key === "price" && values.length === 2 && values.indexOf("0-100") !== -1 && values.indexOf("100-200") !== -1) {
+    return "¥200 内";
+  }
+  if (values.length === 1) {
+    const option = FILTER_OPTIONS[key].find((item) => item.id === values[0]);
+    return option ? option.label : FILTER_LABELS[key];
+  }
+  return `${FILTER_LABELS[key]} · ${values.length}`;
+}
+
 Page({
   data: {
+    contentTop: 78,
     selection: {},
-    summary: "",
+    summary: { occasion: "", details: "", judgment: "" },
     results: [],
-    filters: { cuisine: "", price: "", diet: "" },
+    loading: true,
+    filters: { cuisine: [], price: [], diet: [] },
     filterLabels: { cuisine: "菜系", price: "人均", diet: "忌口" },
     activeFilter: "",
     activeTitle: "",
     activeOptions: [],
+    draftValues: [],
     offset: 0,
     viewMode: "list",
     mapDisabled: true,
@@ -92,6 +131,7 @@ Page({
     mapLongitude: 121.4737,
     mapMarkers: [],
     mapPoints: [],
+    mapRestaurants: [],
     orderCard: null,
     shareImagePath: "",
     cardRendering: false
@@ -99,7 +139,18 @@ Page({
 
   onLoad() {
     const selection = wx.getStorageSync("selection") || { occasion: "browse", people: "", region: "" };
-    this.setData({ selection, summary: describeSelection(selection) }, () => this.refresh());
+    const defaultPrices = defaultPriceFilter(selection);
+    this.setData({
+      contentTop: navigationContentTop(),
+      selection,
+      summary: describeSelectionParts(selection),
+      filters: { cuisine: [], price: defaultPrices, diet: [] },
+      filterLabels: { cuisine: "菜系", price: selectedFilterLabel("price", defaultPrices), diet: "忌口" }
+    }, () => this.refresh());
+  },
+
+  onResize() {
+    this.setData({ contentTop: navigationContentTop() });
   },
 
   goBack() {
@@ -110,51 +161,63 @@ Page({
     }
   },
 
+  goHome() {
+    wx.reLaunch({ url: "/pages/occasion/occasion" });
+  },
+
   refresh() {
-    const results = recommend(this.data.selection, this.data.filters, this.data.offset).map((item) => ({
-      ...item,
-      location: item.region || item.district || "上海",
-      locationSummary: locationSummary(item),
-      cuisineLabel: item.cuisines.slice(0, 2).join(" · "),
-      priceDisplay: `¥${item.priceLabel}/人`,
-      ...orderDishData(item, this.data.selection.people),
-      cardReview: item.fullReview || item.review,
-      hasCoordinate: validCoordinate(item)
-    }));
-    const mapped = results.filter(validCoordinate);
-    const mapMarkers = mapped.map((item, index) => ({
-      id: index + 1,
-      restaurantId: item.id,
-      latitude: item.latitude,
-      longitude: item.longitude,
-      iconPath: "/assets/icons/location-red.png",
-      width: 34,
-      height: 42,
-      callout: {
-        content: item.name,
-        color: "#84201f",
-        fontSize: 13,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: "#decfbd",
-        bgColor: "#fffdf8",
-        padding: 7,
-        display: "BYCLICK"
-      }
-    }));
-    const mapDisabled = !mapped.length;
-    this.setData({
-      results,
-      mapMarkers,
-      mapPoints: mapped.map((item) => ({ latitude: item.latitude, longitude: item.longitude })),
-      mapDisabled,
-      mapLatitude: mapped.length ? mapped.reduce((sum, item) => sum + item.latitude, 0) / mapped.length : 31.2304,
-      mapLongitude: mapped.length ? mapped.reduce((sum, item) => sum + item.longitude, 0) / mapped.length : 121.4737,
-      viewMode: mapDisabled ? "list" : this.data.viewMode,
-      orderCard: null,
-      shareImagePath: "",
-      cardRendering: false
-    });
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.setData({ loading: true, orderCard: null, shareImagePath: "", cardRendering: false });
+    this.refreshTimer = setTimeout(() => {
+      const results = recommend(this.data.selection, this.data.filters, this.data.offset).map((item) => ({
+        ...item,
+        location: item.region || item.district || "上海",
+        locationSummary: locationSummary(item),
+        cuisineLabel: item.cuisines.slice(0, 2).join(" · "),
+        priceDisplay: `¥${item.priceLabel}/人`,
+        ...orderDishData(item, this.data.selection.people),
+        cardReview: item.fullReview || item.review,
+        hasCoordinate: validCoordinate(item)
+      }));
+      const mapped = recommendAll(this.data.selection, this.data.filters).filter(validCoordinate);
+      const mapMarkers = mapped.map((item, index) => ({
+        id: index + 1,
+        restaurantId: item.id,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        iconPath: "/assets/icons/location-pin-red.png",
+        width: 40,
+        height: 40,
+        callout: {
+          content: item.name,
+          color: "#84201f",
+          fontSize: 13,
+          borderRadius: 8,
+          borderWidth: 1,
+          borderColor: "#decfbd",
+          bgColor: "#fffdf8",
+          padding: 7,
+          display: "BYCLICK"
+        }
+      }));
+      const mapDisabled = !mapped.length;
+      this.setData({
+        results,
+        loading: false,
+        mapMarkers,
+        mapPoints: mapped.map((item) => ({ latitude: item.latitude, longitude: item.longitude })),
+        mapRestaurants: mapped,
+        mapDisabled,
+        mapLatitude: mapped.length ? mapped.reduce((sum, item) => sum + item.latitude, 0) / mapped.length : 31.2304,
+        mapLongitude: mapped.length ? mapped.reduce((sum, item) => sum + item.longitude, 0) / mapped.length : 121.4737,
+        viewMode: mapDisabled ? "list" : this.data.viewMode
+      });
+      this.refreshTimer = null;
+    }, LOADING_DELAY);
+  },
+
+  onUnload() {
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
   },
 
   changeView(event) {
@@ -166,9 +229,10 @@ Page({
   },
 
   openMarkerLocation(event) {
-    const marker = this.data.mapMarkers.find((item) => item.id === event.markerId);
+    const markerId = event.detail && event.detail.markerId !== undefined ? event.detail.markerId : event.markerId;
+    const marker = this.data.mapMarkers.find((item) => item.id === markerId);
     if (!marker) return;
-    const restaurant = this.data.results.find((item) => item.id === marker.restaurantId);
+    const restaurant = this.data.mapRestaurants.find((item) => item.id === marker.restaurantId);
     if (!restaurant) return;
     wx.openLocation({
       latitude: restaurant.latitude,
@@ -181,31 +245,56 @@ Page({
 
   openFilter(event) {
     const key = event.currentTarget.dataset.key;
-    this.setData({ activeFilter: key, activeTitle: FILTER_LABELS[key], activeOptions: FILTER_OPTIONS[key] });
+    const draftValues = [...this.data.filters[key]];
+    this.setData({
+      activeFilter: key,
+      activeTitle: FILTER_LABELS[key],
+      activeOptions: FILTER_OPTIONS[key].map((item) => ({
+        ...item,
+        selected: item.id === "any" ? !draftValues.length : draftValues.indexOf(item.id) !== -1
+      })),
+      draftValues
+    });
   },
 
-  closeFilter() { this.setData({ activeFilter: "" }); },
+  closeFilter() { this.setData({ activeFilter: "", draftValues: [] }); },
 
   noop() {},
 
-  chooseFilter(event) {
-    const key = this.data.activeFilter;
+  toggleFilterOption(event) {
     const value = event.currentTarget.dataset.value;
-    const label = event.currentTarget.dataset.label;
+    let draftValues;
+    if (this.data.activeFilter === "price" && value === "any") {
+      draftValues = [];
+    } else {
+      draftValues = this.data.draftValues.indexOf(value) === -1
+        ? [...this.data.draftValues, value]
+        : this.data.draftValues.filter((item) => item !== value);
+    }
     this.setData({
-      [`filters.${key}`]: value,
-      [`filterLabels.${key}`]: label,
-      activeFilter: "",
-      offset: 0
-    }, () => this.refresh());
+      draftValues,
+      activeOptions: this.data.activeOptions.map((item) => ({
+        ...item,
+        selected: item.id === "any" ? !draftValues.length : draftValues.indexOf(item.id) !== -1
+      }))
+    });
   },
 
-  clearFilter() {
-    const key = this.data.activeFilter;
+  resetDraftFilter() {
     this.setData({
-      [`filters.${key}`]: "",
-      [`filterLabels.${key}`]: FILTER_LABELS[key],
+      draftValues: [],
+      activeOptions: this.data.activeOptions.map((item) => ({ ...item, selected: item.id === "any" }))
+    });
+  },
+
+  applyFilter() {
+    const key = this.data.activeFilter;
+    const values = [...this.data.draftValues];
+    this.setData({
+      [`filters.${key}`]: values,
+      [`filterLabels.${key}`]: selectedFilterLabel(key, values),
       activeFilter: "",
+      draftValues: [],
       offset: 0
     }, () => this.refresh());
   },
@@ -214,11 +303,14 @@ Page({
     this.setData({ offset: this.data.offset + 1 }, () => this.refresh());
   },
 
-  openOrderCard(event) {
-    const id = event.currentTarget.dataset.id;
+  openOrderCardById(id) {
     const orderCard = this.data.results.find((item) => item.id === id);
     if (!orderCard) return;
     this.setData({ orderCard, shareImagePath: "", cardRendering: false });
+  },
+
+  openOrderCard(event) {
+    this.openOrderCardById(event.currentTarget.dataset.id);
   },
 
   closeOrderCard() {
@@ -236,7 +328,7 @@ Page({
 
     context.setFillStyle("#806e67");
     context.setFontSize(19);
-    context.fillText("PENGUIN PICKS  ·  点 菜 卡", 48, 62);
+    context.fillText("PEIWEN PICKS  ·  点 菜 卡", 48, 62);
 
     context.setFillStyle("#84201f");
     context.setFontSize(44);
@@ -383,7 +475,10 @@ Page({
   },
 
   openLocation(event) {
-    const id = event.currentTarget.dataset.id;
+    this.openLocationById(event.currentTarget.dataset.id);
+  },
+
+  openLocationById(id) {
     const restaurant = this.data.results.find((item) => item.id === id) || this.data.orderCard;
     if (!restaurant || !validCoordinate(restaurant)) {
       wx.showToast({ title: "当前餐厅暂无可用坐标", icon: "none" });
