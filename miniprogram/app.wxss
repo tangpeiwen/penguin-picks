@@ -11,7 +11,7 @@ page {
   --blue-deep: #91b7cd;
   --line: #decfbd;
   --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-hand: "LemiXiaoNaiPao", "Kaiti SC", "STKaiti", "KaiTi", "Songti SC", serif;
+  --font-hand: "LemiXiaoNaiPaoStatic", "LemiXiaoNaiPaoRestaurants", "Kaiti SC", "STKaiti", "KaiTi", "Songti SC", serif;
   min-height: 100%;
   color: var(--ink);
   background-color: var(--paper-deep);

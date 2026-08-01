@@ -28,9 +28,14 @@ REGION_ALIASES = {
 
 
 def mapped_regions(value: str) -> list[str]:
-    """Keep the reviewed 片区 column authoritative; slash can be part of a label."""
+    """Keep one reviewed primary 片区 for compact result-card display."""
     parts = [part.strip() for part in re.split(r"[,，、]", value or "") if part.strip()]
-    return list(dict.fromkeys(REGION_ALIASES.get(part, part) for part in parts))
+    return [REGION_ALIASES.get(parts[0], parts[0])] if parts else []
+
+
+def has_visited(value: str) -> bool:
+    """Treat only an explicit truthy marker as visited; blanks belong to the wishlist."""
+    return (value or "").strip().lower() in {"1", "true", "yes", "是", "去过", "吃过"}
 
 
 def split_dish_names(value: str) -> list[str]:
@@ -106,15 +111,26 @@ def max_people(value: str) -> int:
 
 
 def reservation(value: str) -> tuple[str, str]:
-    text = value or ""
-    if any(term in text for term in ("不太排队", "不太需要排队", "无需排队", "不需要排队")):
-        return "easy", "通常不用等"
-    if any(term in text for term in ("提前", "会排队", "需要排队", "订不到", "抢")):
-        return "hard", "最好提前订"
+    text = re.sub(r"\s+", "", value or "")
+    queue_warning = any(term in text for term in (
+        "会排队", "要排队", "需要排队", "可能排队", "偶尔排队", "必排队",
+        "排队很久", "排很久", "排队1小时", "高峰期",
+    ))
+    no_queue = any(term in text for term in (
+        "不太排队", "不太需要排队", "无需排队", "不需要排队", "不用排队",
+        "不排队", "不大需要排队", "基本不用排", "基本不排", "一般不排",
+        "应该不排队", "不需要",
+    ))
+    if no_queue and not queue_warning:
+        return "easy", "基本不用排队"
+    if any(term in text for term in ("必排队", "排队很久", "排很久", "排队1小时", "订不到", "抢位置")):
+        return "hard", "建议提前安排"
+    if "提前" in text:
+        return "hard", "建议提前订"
+    if "排队" in text or "排很久" in text:
+        return "medium", "可能要排队"
     if any(term in text for term in ("预订", "预定", "订座", "电话", "微信")):
         return "medium", "可提前订"
-    if "排队" in text:
-        return "medium", "可能要等位"
     return "easy", "到店即可"
 
 
@@ -228,6 +244,7 @@ def main() -> None:
         restaurant = {
             "id": row.get("店铺ID") or f"restaurant-{index}",
             "name": (row.get("店名") or "未命名餐厅").strip(),
+            "visited": has_visited(row.get("去过", "")),
             "cuisines": cuisines,
             "dishes": dishes,
             "priceLabel": (row.get("人均") or "价格待确认").strip(),

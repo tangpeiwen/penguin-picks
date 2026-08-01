@@ -27,8 +27,8 @@ const PEOPLE_REQUIRED = { upto4: 4, "5-6": 5, "7-8": 7, "9+": 9, "3-5": 5, "6+":
 const CUISINE_GROUP_MATCHERS = [
   { id: "韩餐", terms: ["韩餐", "韩式"] },
   { id: "日料", terms: ["日料", "日式", "寿司", "烧鸟"] },
-  { id: "东南亚", terms: ["东南亚", "泰国", "越南"] },
-  { id: "西餐", terms: ["西餐", "西班牙", "意大利"] },
+  { id: "西餐", terms: ["西餐", "西班牙", "意大利", "法国", "法式", "拉美", "墨西哥", "美式", "地中海"] },
+  { id: "东南亚", terms: ["东南亚", "泰国", "越南", "印度"] },
   { id: "火锅", terms: ["火锅"] }
 ];
 
@@ -46,16 +46,7 @@ function defaultPriceFilter(selection) {
 
 function regionMatches(restaurant, region) {
   if (!region || region === "不限区域") return true;
-  if (Array.isArray(restaurant.areas) && restaurant.areas.length) {
-    return restaurant.areas.indexOf(region) !== -1;
-  }
-  const haystack = `${restaurant.district} ${restaurant.region} ${restaurant.address}`;
-  const standardGroups = REGION_OPTIONS.filter((item) => item.terms.length);
-  if (region === "其他区域") {
-    return !standardGroups.some((group) => group.terms.some((term) => haystack.indexOf(term) !== -1));
-  }
-  const group = REGION_OPTIONS.find((item) => item.id === region);
-  return group ? group.terms.some((term) => haystack.indexOf(term) !== -1) : false;
+  return REGION_OPTIONS.some((item) => item.id === region) && restaurant.district === region;
 }
 
 function selectedRegions(selection) {
@@ -85,8 +76,9 @@ function filterValues(filters, key) {
 }
 
 function priceMatches(restaurant, value) {
-  const parts = value.split("-").map(Number);
-  return restaurant.priceMin < (parts[1] || 9999) && restaurant.priceMax > parts[0];
+  if (value === "700-9999") return restaurant.priceMin >= 700;
+  const upperLimit = Number(value.split("-")[1]);
+  return Number.isFinite(upperLimit) && restaurant.priceMax <= upperLimit;
 }
 
 function scoreRestaurant(restaurant, selection, filters) {
@@ -114,6 +106,7 @@ function recommendAll(selection, filters) {
   const cuisines = filterValues(filters, "cuisine");
   const prices = filterValues(filters, "price");
   const diets = filterValues(filters, "diet");
+  const visitStatuses = filterValues(filters, "visitStatus");
   return restaurants
     .filter((restaurant) => !activeRegions.length || activeRegions.some((region) => regionMatches(restaurant, region)))
     .filter((restaurant) => peopleFits(restaurant, selection.people))
@@ -121,8 +114,10 @@ function recommendAll(selection, filters) {
     .filter((restaurant) => !cuisines.length || cuisines.indexOf(cuisineGroup(restaurant)) !== -1)
     .filter((restaurant) => !diets.length || diets.every((diet) => restaurant.diet.indexOf(diet) !== -1))
     .filter((restaurant) => !prices.length || prices.some((price) => priceMatches(restaurant, price)))
+    .filter((restaurant) => !visitStatuses.length || visitStatuses.indexOf(restaurant.visited ? "visited" : "wishlist") !== -1)
     .map((restaurant) => ({ ...restaurant, score: scoreRestaurant(restaurant, selection, filters) }))
     .sort((a, b) => {
+      if (a.visited !== b.visited) return a.visited ? -1 : 1;
       if (!["casual", "guest"].includes(selection.occasion) && !prices.length) {
         const aAffordable = a.priceMin < 300;
         const bAffordable = b.priceMin < 300;
@@ -135,11 +130,8 @@ function recommendAll(selection, filters) {
 
 function recommend(selection, filters, offset) {
   const ranked = recommendAll(selection, filters);
-  const count = Math.min(3, ranked.length);
-  const start = ranked.length ? (offset * count) % ranked.length : 0;
-  return ranked.slice(start, start + count).concat(
-    start + count > ranked.length ? ranked.slice(0, start + count - ranked.length) : []
-  );
+  const start = Math.max(0, offset || 0) * 3;
+  return ranked.slice(start, start + 3);
 }
 
 function describeSelectionParts(selection) {
@@ -147,7 +139,7 @@ function describeSelectionParts(selection) {
     return {
       occasion: "看看我都吃了什么",
       details: "不限人数 · 不限区域",
-      judgment: "不设目的地，帮你发现一些值得去试试的地方。"
+      judgment: "不设目的地，帮你发现一些值得尝试的餐厅。"
     };
   }
   const occasion = OCCASION_LABELS[selection.occasion] || "这顿饭";
@@ -155,7 +147,7 @@ function describeSelectionParts(selection) {
   const regions = selectedRegions(selection);
   let region = "全上海";
   if (regions.length && regions.indexOf("不限区域") === -1) {
-    region = regions.length <= 2 ? regions.join("、") : `${regions.slice(0, 2).join("、")}等${regions.length}个片区`;
+    region = regions.length <= 2 ? regions.join("、") : `${regions.slice(0, 2).join("、")}等${regions.length}个区域`;
   }
   const judgments = {
     date: "在舒服的氛围里慢慢吃慢慢聊。",
@@ -166,7 +158,7 @@ function describeSelectionParts(selection) {
     casual: "环境普普，但味道对得起这个价。",
     parents: "一家人都能自在吃顿饭。",
     talk: "在安静、克制有分寸的地方聊重要的事。",
-    explore: "不设目的地，帮你发现一些值得去试试的地方。"
+    explore: "不设目的地，帮你发现一些值得尝试的餐厅。"
   };
   return {
     occasion,

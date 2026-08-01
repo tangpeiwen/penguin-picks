@@ -19,6 +19,21 @@
     <view class="summary-judgment hand-title">「{{summary.judgment}}」</view>
   </view>
 
+  <view wx:if="{{isExplore}}" class="browse-tabs" aria-label="浏览清单切换">
+    <button
+      class="browse-tab {{browseTab === 'visited' ? 'active' : ''}}"
+      data-tab="visited"
+      bindtap="changeBrowseTab"
+      aria-pressed="{{browseTab === 'visited'}}"
+    >我吃过的</button>
+    <button
+      class="browse-tab {{browseTab === 'wishlist' ? 'active' : ''}}"
+      data-tab="wishlist"
+      bindtap="changeBrowseTab"
+      aria-pressed="{{browseTab === 'wishlist'}}"
+    >待吃清单</button>
+  </view>
+
   <view class="filters">
     <button class="filter-chip {{filters.cuisine.length ? 'active' : ''}}" data-key="cuisine" bindtap="openFilter" aria-expanded="{{activeFilter === 'cuisine'}}">
       <text class="filter-label">{{filterLabels.cuisine}}</text><view class="filter-chevron {{activeFilter === 'cuisine' ? 'open' : ''}}"></view>
@@ -40,41 +55,45 @@
     <view
       wx:for="{{results}}"
       wx:key="id"
-      class="restaurant-card paper-card"
+      class="restaurant-card paper-card {{item.visited ? 'restaurant-card--visited' : 'restaurant-card--wishlist'}}"
       data-id="{{item.id}}"
       bindtap="openOrderCard"
       hover-class="restaurant-card--pressed"
       hover-start-time="20"
       hover-stay-time="90"
       aria-role="button"
-      aria-label="打开{{item.name}}的点菜卡"
+      aria-label="打开{{item.name}}的{{item.detailLabel}}"
     >
       <view class="card-main">
         <view class="card-copy">
           <view class="card-heading">
-            <text class="restaurant-name hand-title">{{item.name}}</text>
+            <text class="restaurant-name hand-title {{item.fallbackNameFont ? 'fallback-name-font' : ''}}">{{item.name}}</text>
+            <view class="card-affordance">
+              <text wx:if="{{!item.visited}}" class="wishlist-badge hand-title">想去</text>
+              <text class="detail-chevron" aria-hidden="true">›</text>
+            </view>
           </view>
           <view class="primary-meta">
             <text class="cuisine hand-title">{{item.cuisineLabel}}</text>
-            <text class="price">{{item.priceDisplay}}</text>
-          </view>
-          <view class="location-row">
-            <text class="location-line">{{item.locationSummary}}</text>
-            <button
-              class="navigate-button"
-              data-id="{{item.id}}"
-              catchtap="openLocation"
-              aria-label="打开{{item.name}}的地图导航"
-            ><image class="navigate-icon" src="/assets/icons/location-pin-red.png" mode="aspectFit"></image></button>
+            <view class="price-location-group">
+              <text class="price-location">{{item.priceDisplay}} · {{item.locationSummary}}</text>
+              <button
+                wx:if="{{item.hasCoordinate}}"
+                class="navigate-button"
+                data-id="{{item.id}}"
+                catchtap="openLocation"
+                aria-label="打开{{item.name}}的地图导航"
+              ><image class="navigate-icon" src="/assets/icons/location-pin-red.png" mode="aspectFit"></image></button>
+            </view>
           </view>
           <text class="restaurant-review">{{item.review}}</text>
-          <text wx:if="{{item.reservationDisplay}}" class="reservation {{item.reservationLevel}}">{{item.reservationDisplay}}</text>
+          <text wx:if="{{item.queueException}}" class="queue-exception">{{item.queueException}}</text>
         </view>
       </view>
     </view>
     <view wx:if="{{!results.length}}" class="empty paper-card">
       <view class="empty-face">⌣</view>
-      <text>这个组合我还真没吃到过</text>
+      <text>{{emptyText}}</text>
     </view>
   </view>
 
@@ -96,14 +115,14 @@
   <view wx:if="{{orderCard}}" class="order-mask" bindtap="closeOrderCard">
     <view class="order-modal">
       <view class="order-card" catchtap="noop">
-        <text class="order-eyebrow">PEIWEN PICKS · 点菜卡</text>
+        <text class="order-eyebrow">PEIWEN PICKS · {{orderCard.detailLabel}}</text>
         <view
           class="order-name-row"
           data-value="{{orderCard.name}}"
           data-label="店名"
           bindlongpress="copyText"
         >
-          <view class="order-name hand-title">{{orderCard.name}}</view>
+          <view class="order-name hand-title {{orderCard.fallbackNameFont ? 'fallback-name-font' : ''}}">{{orderCard.name}}</view>
           <button class="copy-icon-button" data-value="{{orderCard.name}}" data-label="店名" bindtap="copyText" aria-label="复制店名">
             <view class="copy-glyph"><view class="copy-back"></view><view class="copy-front"></view></view>
           </button>
@@ -125,7 +144,7 @@
             </view>
           </view>
         </block>
-        <view class="review-heading hand-title">我的一句话</view>
+        <view class="review-heading hand-title">{{orderCard.reviewHeading}}</view>
         <text class="order-review">{{orderCard.cardReview}}</text>
         <view wx:if="{{orderCard.pitfall || orderCard.reservationDisplay}}" class="order-notes">
           <view wx:if="{{orderCard.pitfall}}" class="order-note">
@@ -148,6 +167,13 @@
             <view class="copy-glyph"><view class="copy-back"></view><view class="copy-front"></view></view>
           </button>
         </view>
+        <button
+          wx:if="{{orderCard.hasCoordinate}}"
+          class="order-map-button"
+          data-id="{{orderCard.id}}"
+          catchtap="openLocation"
+          aria-label="打开{{orderCard.name}}的地图导航"
+        >地图导航 <text>→</text></button>
       </view>
       <view class="order-actions" catchtap="noop">
         <button class="order-action save" bindtap="saveOrderCard" disabled="{{cardRendering}}">{{cardRendering ? '正在生成…' : '保存图片'}}</button>
@@ -157,7 +183,10 @@
 
   <canvas canvas-id="orderCardCanvas" class="share-canvas"></canvas>
 
-  <button class="change-batch" bindtap="changeBatch">换一批 <text>→</text></button>
+  <view wx:if="{{viewMode === 'list' && !loading && (hasPrevious || hasMore)}}" class="batch-actions">
+    <button wx:if="{{hasPrevious}}" class="change-batch previous" bindtap="previousBatch"><text>←</text> 上一批</button>
+    <button wx:if="{{hasMore}}" class="change-batch next" bindtap="changeBatch">下一批 <text>→</text></button>
+  </view>
 
   <view wx:if="{{activeFilter}}" class="sheet-mask" bindtap="closeFilter">
     <view class="filter-sheet" catchtap="noop">

@@ -1,6 +1,5 @@
 const { recommend, recommendAll, describeSelectionParts, defaultPriceFilter } = require("../../utils/recommend");
 const { orderDishData } = require("../../utils/order-card");
-const { REGION_OPTIONS } = require("../../config/regions");
 
 const FILTER_OPTIONS = {
   cuisine: [
@@ -30,8 +29,16 @@ const FILTER_OPTIONS = {
 
 const FILTER_LABELS = { cuisine: "菜系", price: "人均", diet: "忌口" };
 const CARD_WIDTH = 630;
-const CARD_HEIGHT = 1000;
+const CARD_MAX_HEIGHT = 1300;
+const CARD_FOOTER_HEIGHT = 170;
 const LOADING_DELAY = 280;
+// Native Canvas cannot use fonts registered through wx.loadFontFace. Use one
+// system handwriting family directly so iOS does not fall back to PingFang.
+const HAND_FONT = "STKaiti";
+const BODY_FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+const MINI_PROGRAM_CODE_PATH = "/assets/miniprogram-code.jpg";
+const AREA_LABELS = { "衡山复兴": "衡山路/复兴西路", "古北虹桥": "古北/虹桥" };
+const HAND_FONT_MISSING_HAN = /[園專葉記鄉鄧門雲鮨鮮緣]/;
 
 function roundRect(context, x, y, width, height, radius) {
   context.beginPath();
@@ -47,7 +54,7 @@ function roundRect(context, x, y, width, height, radius) {
   context.closePath();
 }
 
-function drawWrappedText(context, text, x, y, maxWidth, lineHeight, maxLines) {
+function wrappedLines(context, text, maxWidth, maxLines) {
   const characters = Array.from(text || "");
   const lines = [];
   let line = "";
@@ -67,8 +74,28 @@ function drawWrappedText(context, text, x, y, maxWidth, lineHeight, maxLines) {
     while (last && context.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1);
     visibleLines[maxLines - 1] = `${last}…`;
   }
+  return visibleLines;
+}
+
+function drawWrappedText(context, text, x, y, maxWidth, lineHeight, maxLines) {
+  const visibleLines = wrappedLines(context, text, maxWidth, maxLines);
   visibleLines.forEach((visibleLine, index) => context.fillText(visibleLine, x, y + index * lineHeight));
   return y + visibleLines.length * lineHeight;
+}
+
+function setCanvasFont(context, size, family = BODY_FONT) {
+  if (typeof context.setFontSize === "function") context.setFontSize(size);
+  context.font = `normal 400 ${size}px ${family}`;
+}
+
+function drawCenteredWrappedText(context, text, centerX, centerY, maxWidth, lineHeight, maxLines) {
+  const lines = wrappedLines(context, text, maxWidth, maxLines);
+  const firstBaseline = centerY - ((lines.length - 1) * lineHeight) / 2;
+  context.setTextAlign("center");
+  context.setTextBaseline("middle");
+  lines.forEach((line, index) => context.fillText(line, centerX, firstBaseline + index * lineHeight));
+  context.setTextAlign("left");
+  context.setTextBaseline("alphabetic");
 }
 
 function validCoordinate(item) {
@@ -77,23 +104,25 @@ function validCoordinate(item) {
 
 function locationSummary(item) {
   const area = Array.isArray(item.areas) && item.areas.length ? item.areas[0] : "";
-  const areaOption = REGION_OPTIONS.find((option) => option.id === area);
-  const region = (areaOption ? areaOption.label : (item.region || item.district || "上海")).split(/[、,，]/)[0];
-  const building = item.building || "";
-  if (!building || region.indexOf(building) !== -1 || building.indexOf(region) !== -1) return region;
-  return `${region} · ${building}`;
+  const region = AREA_LABELS[area] || area || item.region || item.district || "上海";
+  return region;
+}
+
+function queueException(item) {
+  if (!item || item.reservationLevel === "easy" || item.reservationLabel === "可提前订") return "";
+  return item.reservationLabel || "";
 }
 
 function navigationContentTop() {
   try {
     if (typeof wx.getMenuButtonBoundingClientRect === "function") {
       const menuRect = wx.getMenuButtonBoundingClientRect();
-      if (menuRect && Number.isFinite(menuRect.bottom) && menuRect.bottom > 0) return Math.ceil(menuRect.bottom + 10);
+      if (menuRect && Number.isFinite(menuRect.bottom) && menuRect.bottom > 0) return Math.ceil(menuRect.bottom + 4);
     }
     const windowInfo = typeof wx.getWindowInfo === "function"
       ? wx.getWindowInfo()
       : (typeof wx.getSystemInfoSync === "function" ? wx.getSystemInfoSync() : {});
-    return Math.ceil((windowInfo.statusBarHeight || 24) + 54);
+    return Math.ceil((windowInfo.statusBarHeight || 24) + 48);
   } catch (error) {
     return 78;
   }
@@ -118,7 +147,7 @@ Page({
     summary: { occasion: "", details: "", judgment: "" },
     results: [],
     loading: true,
-    filters: { cuisine: [], price: [], diet: [] },
+    filters: { cuisine: [], price: [], diet: [], visitStatus: [] },
     filterLabels: { cuisine: "菜系", price: "人均", diet: "忌口" },
     activeFilter: "",
     activeTitle: "",
@@ -134,17 +163,25 @@ Page({
     mapRestaurants: [],
     orderCard: null,
     shareImagePath: "",
-    cardRendering: false
+    cardRendering: false,
+    isExplore: false,
+    browseTab: "visited",
+    hasPrevious: false,
+    hasMore: false,
+    emptyText: "这个组合我还真没吃到过"
   },
 
   onLoad() {
     const selection = wx.getStorageSync("selection") || { occasion: "browse", people: "", region: "" };
     const defaultPrices = defaultPriceFilter(selection);
+    const isExplore = selection.occasion === "explore" || selection.occasion === "browse";
     this.setData({
       contentTop: navigationContentTop(),
       selection,
       summary: describeSelectionParts(selection),
-      filters: { cuisine: [], price: defaultPrices, diet: [] },
+      filters: { cuisine: [], price: defaultPrices, diet: [], visitStatus: isExplore ? ["visited"] : [] },
+      isExplore,
+      browseTab: "visited",
       filterLabels: { cuisine: "菜系", price: selectedFilterLabel("price", defaultPrices), diet: "忌口" }
     }, () => this.refresh());
   },
@@ -175,19 +212,25 @@ Page({
         locationSummary: locationSummary(item),
         cuisineLabel: item.cuisines.slice(0, 2).join(" · "),
         priceDisplay: `¥${item.priceLabel}/人`,
-        ...orderDishData(item, this.data.selection.people),
+        ...orderDishData(item),
         cardReview: item.fullReview || item.review,
+        queueException: queueException(item),
+        fallbackNameFont: HAND_FONT_MISSING_HAN.test(item.name),
+        detailLabel: item.visited ? "点菜卡" : "待吃卡",
+        reviewHeading: item.visited ? "我的一句话" : "为什么想去",
         hasCoordinate: validCoordinate(item)
       }));
-      const mapped = recommendAll(this.data.selection, this.data.filters).filter(validCoordinate);
+      const allMatches = recommendAll(this.data.selection, this.data.filters);
+      const mapped = allMatches.filter(validCoordinate);
       const mapMarkers = mapped.map((item, index) => ({
         id: index + 1,
         restaurantId: item.id,
         latitude: item.latitude,
         longitude: item.longitude,
-        iconPath: "/assets/icons/location-pin-red.png",
-        width: 40,
-        height: 40,
+        iconPath: "/assets/icons/map-marker-red.png",
+        width: 27,
+        height: 33,
+        anchor: { x: 0.5, y: 1 },
         callout: {
           content: item.name,
           color: "#84201f",
@@ -208,8 +251,11 @@ Page({
         mapPoints: mapped.map((item) => ({ latitude: item.latitude, longitude: item.longitude })),
         mapRestaurants: mapped,
         mapDisabled,
+        hasPrevious: this.data.offset > 0,
+        hasMore: (this.data.offset + 1) * 3 < allMatches.length,
         mapLatitude: mapped.length ? mapped.reduce((sum, item) => sum + item.latitude, 0) / mapped.length : 31.2304,
         mapLongitude: mapped.length ? mapped.reduce((sum, item) => sum + item.longitude, 0) / mapped.length : 121.4737,
+        emptyText: this.data.isExplore && this.data.browseTab === "wishlist" ? "待吃清单里还没有符合的餐厅" : "这个组合我还真没吃到过",
         viewMode: mapDisabled ? "list" : this.data.viewMode
       });
       this.refreshTimer = null;
@@ -303,6 +349,21 @@ Page({
     this.setData({ offset: this.data.offset + 1 }, () => this.refresh());
   },
 
+  previousBatch() {
+    if (this.data.offset <= 0) return;
+    this.setData({ offset: this.data.offset - 1 }, () => this.refresh());
+  },
+
+  changeBrowseTab(event) {
+    const browseTab = event.currentTarget.dataset.tab;
+    if (browseTab === this.data.browseTab) return;
+    this.setData({
+      browseTab,
+      offset: 0,
+      "filters.visitStatus": [browseTab]
+    }, () => this.refresh());
+  },
+
   openOrderCardById(id) {
     const orderCard = this.data.results.find((item) => item.id === id);
     if (!orderCard) return;
@@ -322,25 +383,25 @@ Page({
     if (!card) return;
     const context = wx.createCanvasContext("orderCardCanvas", this);
     context.setFillStyle("#f8f3e9");
-    context.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
+    context.fillRect(0, 0, CARD_WIDTH, CARD_MAX_HEIGHT);
     context.setFillStyle("#a72f2e");
     context.fillRect(0, 0, CARD_WIDTH, 18);
 
     context.setFillStyle("#806e67");
-    context.setFontSize(19);
-    context.fillText("PEIWEN PICKS  ·  点 菜 卡", 48, 62);
+    setCanvasFont(context, 19);
+    context.fillText(`PEIWEN PICKS  ·  ${card.visited ? "点 菜 卡" : "待 吃 卡"}`, 48, 62);
 
     context.setFillStyle("#84201f");
-    context.setFontSize(44);
-    let y = drawWrappedText(context, card.name, 48, 116, 534, 50, 2) + 1;
+    setCanvasFont(context, 44, HAND_FONT);
+    let y = drawWrappedText(context, card.name, 48, 124, 534, 52, 2) + 18;
 
     context.setFillStyle("#806e67");
-    context.setFontSize(20);
+    setCanvasFont(context, 20);
     context.fillText(`${card.cuisineLabel}  ·  ${card.priceDisplay}`, 48, y);
-    y += 31;
-    context.setFontSize(18);
+    y += 34;
+    setCanvasFont(context, 18);
     context.fillText(card.locationSummary, 48, y);
-    y += 35;
+    y += 46;
 
     context.setStrokeStyle("#decfbd");
     context.setLineWidth(2);
@@ -350,19 +411,19 @@ Page({
     context.lineTo(582, y);
     context.stroke();
     context.setLineDash([], 0);
-    y += 30;
+    y += 38;
 
     if (card.cardDishes.length) {
       context.setFillStyle("#84201f");
-      context.setFontSize(25);
+      setCanvasFont(context, 25, HAND_FONT);
       context.fillText(card.dishHeading, 48, y);
-      y += 36;
+      y += 45;
 
       const gridTop = y;
       const dishWidth = 258;
       const dishHeight = 84;
       const gapX = 18;
-      const gapY = 12;
+      const gapY = 14;
       card.cardDishes.forEach((dish, index) => {
         const isWide = card.cardDishes.length % 2 === 1 && index === card.cardDishes.length - 1;
         const column = index % 2;
@@ -374,46 +435,69 @@ Page({
         roundRect(context, dishX, dishY, width, dishHeight, 17);
         context.fill();
         context.setFillStyle("#a72f2e");
-        context.setFontSize(17);
-        context.fillText(`${index + 1}`.padStart(2, "0"), dishX + 16, dishY + 31);
+        setCanvasFont(context, 17);
+        context.setTextBaseline("middle");
+        context.fillText(`${index + 1}`.padStart(2, "0"), dishX + 16, dishY + dishHeight / 2);
+        context.setTextBaseline("alphabetic");
         context.setFillStyle("#3b2925");
-        context.setFontSize(25);
-        drawWrappedText(context, dish, dishX + 53, dishY + 32, width - 68, 27, 2);
+        setCanvasFont(context, 25, HAND_FONT);
+        drawCenteredWrappedText(context, dish, dishX + width / 2, dishY + dishHeight / 2, width - 92, 29, 2);
       });
-      y = gridTop + Math.ceil(card.cardDishes.length / 2) * (dishHeight + gapY) + 13;
+      const gridRows = Math.ceil(card.cardDishes.length / 2);
+      y = gridTop + gridRows * dishHeight + Math.max(0, gridRows - 1) * gapY + 42;
     }
 
     context.setFillStyle("#84201f");
-    context.setFontSize(23);
-    context.fillText("我的一句话", 48, y);
-    y += 36;
+    setCanvasFont(context, 23, HAND_FONT);
+    context.fillText(card.reviewHeading, 48, y);
+    y += 44;
     context.setFillStyle("#5f504a");
-    context.setFontSize(22);
-    y = drawWrappedText(context, card.review, 48, y, 534, 29, 2) + 15;
+    setCanvasFont(context, 22);
+    y = drawWrappedText(context, card.review, 48, y, 534, 32, 2) + 24;
 
     if (card.pitfall) {
       context.setFillStyle("#84201f");
-      context.setFontSize(19);
+      setCanvasFont(context, 19, HAND_FONT);
       context.fillText("避雷", 48, y);
       context.setFillStyle("#5f504a");
-      context.setFontSize(18);
-      y = drawWrappedText(context, card.pitfall, 108, y, 474, 25, 2) + 10;
+      setCanvasFont(context, 18);
+      y = drawWrappedText(context, card.pitfall, 108, y, 474, 28, 2) + 22;
     }
 
     if (card.reservationDisplay) {
       context.setFillStyle("#84201f");
-      context.setFontSize(19);
+      setCanvasFont(context, 19, HAND_FONT);
       context.fillText("订位", 48, y);
       context.setFillStyle("#5f504a");
-      context.setFontSize(18);
-      y = drawWrappedText(context, card.reservationDisplay, 108, y, 474, 25, 1) + 10;
+      setCanvasFont(context, 18);
+      y = drawWrappedText(context, card.reservationDisplay, 108, y, 474, 28, 1) + 22;
     }
 
     context.setFillStyle("#806e67");
-    context.setFontSize(17);
-    drawWrappedText(context, card.address, 48, Math.min(y, 930), 534, 23, 1);
+    setCanvasFont(context, 17);
+    const addressBottom = drawWrappedText(context, card.address, 48, y + 8, 534, 25, 1);
+    const footerTop = Math.min(addressBottom + 44, CARD_MAX_HEIGHT - CARD_FOOTER_HEIGHT);
+    const exportHeight = footerTop + CARD_FOOTER_HEIGHT;
+
+    context.setStrokeStyle("#decfbd");
+    context.setLineWidth(2);
+    context.setLineDash([8, 8], 0);
+    context.beginPath();
+    context.moveTo(48, footerTop);
+    context.lineTo(582, footerTop);
+    context.stroke();
+    context.setLineDash([], 0);
+
+    context.drawImage(MINI_PROGRAM_CODE_PATH, 48, footerTop + 20, 116, 116);
+    context.setFillStyle("#84201f");
+    setCanvasFont(context, 24, HAND_FONT);
+    context.fillText("微信扫一扫", 184, footerTop + 57);
+    context.setFillStyle("#806e67");
+    setCanvasFont(context, 17);
+    context.fillText("打开 PEIWEN PICKS", 184, footerTop + 87);
     context.setTextAlign("right");
-    context.fillText("截图留着，点菜不慌", 582, 972);
+    setCanvasFont(context, 18, HAND_FONT);
+    context.fillText(card.visited ? "截图留着，点菜不慌" : "收好这张，找天去吃", 582, footerTop + 132);
     context.setTextAlign("left");
 
     context.draw(false, () => {
@@ -421,9 +505,9 @@ Page({
         wx.canvasToTempFilePath({
           canvasId: "orderCardCanvas",
           width: CARD_WIDTH,
-          height: CARD_HEIGHT,
+          height: exportHeight,
           destWidth: CARD_WIDTH * 2,
-          destHeight: CARD_HEIGHT * 2,
+          destHeight: exportHeight * 2,
           fileType: "png",
           quality: 1,
           success: (result) => {
@@ -451,7 +535,7 @@ Page({
     this.withOrderCardImage((filePath) => {
       wx.saveImageToPhotosAlbum({
         filePath,
-        success: () => wx.showToast({ title: "点菜卡已保存", icon: "success" }),
+        success: () => wx.showToast({ title: `${this.data.orderCard.visited ? "点菜卡" : "待吃卡"}已保存`, icon: "success" }),
         fail: (error) => {
           if ((error.errMsg || "").indexOf("auth deny") !== -1) {
             wx.showModal({

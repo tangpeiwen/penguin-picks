@@ -1,20 +1,15 @@
+// The second step filters by administrative district. Restaurant cards keep
+// using the reviewed `areas` field for a more useful neighbourhood label.
 const REGION_OPTIONS = [
-  { id: "不限区域", label: "不限区域", terms: [] },
-  { id: "静安寺", label: "静安寺", terms: ["静安寺", "愚园东路", "胶州路", "余姚路", "康定路", "武定路"] },
-  { id: "南京西路", label: "南京西路", terms: ["南京西路", "铜仁路", "石门一路", "大沽路"] },
-  { id: "新天地", label: "新天地", terms: ["新天地", "马当路", "兴安路"] },
-  { id: "淮海中路", label: "淮海中路", terms: ["淮海中路", "进贤路"] },
-  { id: "衡山复兴", label: "衡山路/复兴西路", terms: ["衡山路", "复兴西路", "湖南路", "新乐路", "五原路", "永福路", "建国西路", "陕西南路", "襄阳北路", "襄阳南路", "高安路", "音乐学院"] },
-  { id: "徐家汇", label: "徐家汇", terms: ["徐家汇", "肇嘉浜路", "广元路", "柳州路", "天平路"] },
-  { id: "愚园路", label: "愚园路", terms: ["愚园路", "江苏路", "中山公园", "番禺路", "长宁来福士", "长宁路1123号"] },
-  { id: "古北虹桥", label: "古北/虹桥", terms: ["古北", "古羊路", "安龙路","虹桥", "虹梅路", "虹井路", "兴义路", "娄山关路", "宋园路", "运乐路"] },
-  { id: "外滩", label: "外滩", terms: ["外滩", "BFC", "北京东路", "南京东路"] },
-  { id: "苏河湾", label: "苏河湾", terms: ["苏河湾", "北苏州路"] },
-  { id: "陆家嘴", label: "陆家嘴", terms: ["陆家嘴", "世纪大道", "商城路", "浦东大道", "昌邑路"] },
-  { id: "前滩", label: "前滩", terms: ["前滩","三林", "上南路"] },
-  { id: "西岸", label: "西岸", terms: ["西岸", "龙文路"] },
-  { id: "虹口北外滩", label: "虹口北外滩", terms: ["北外滩", "宝安路", "海宁路"] },
-  { id: "其他区域", label: "其他区域", terms: [] }
+  { id: "不限区域", label: "不限区域" },
+  { id: "黄浦区", label: "黄浦区" },
+  { id: "静安区", label: "静安区" },
+  { id: "徐汇区", label: "徐汇区" },
+  { id: "长宁区", label: "长宁区" },
+  { id: "浦东新区", label: "浦东新区" },
+  { id: "普陀区", label: "普陀区" },
+  { id: "闵行区", label: "闵行区" },
+  { id: "虹口区", label: "虹口区" }
 ];
 
 module.exports = { REGION_OPTIONS };

@@ -40,13 +40,13 @@ python3 tools/split_icon_atlas.py
 
 ## 更新手写字体
 
-小程序使用 `miniprogram/styles/fonts.wxss` 中的内嵌字体子集，避免把完整中文字体放进代码包。页面文案或餐厅数据增加新字后，执行：
+小程序使用 `miniprogram/styles/fonts.wxss` 导入的两个内嵌 WOFF2 字体分片，避免把完整中文字体放进代码包，并保证每个资源小于 200 KiB。页面文案或餐厅名称、菜系增加新字后，执行：
 
 ```bash
 /usr/bin/python3 tools/build_font_asset.py "/path/to/乐米小奶泡体.ttf"
 ```
 
-脚本需要本机提供 `pyftsubset`，并会自动扫描当前小程序中的文字后重新生成字体文件。
+脚本需要本机提供 `pyftsubset`。它只为静态界面文案、餐厅名和菜系生成字体；评价、地址、菜品等系统正文不会进入手写字体子集。
 
 ## 数据说明
 

@@ -30,7 +30,7 @@
   <view wx:if="{{peopleRequired}}" class="divider"></view>
 
   <view class="section fade-up region-section {{peopleRequired ? '' : 'region-section-only'}}">
-    <view class="section-title">{{peopleRequired ? '再选片区' : '选片区'}} <text class="section-hint">可多选，按方便到达的一带来选</text></view>
+    <view class="section-title">{{peopleRequired ? '再选区域' : '选区域'}} <text class="section-hint">可多选，按行政区筛选</text></view>
     <view class="region-grid">
       <button
         wx:for="{{regions}}"
