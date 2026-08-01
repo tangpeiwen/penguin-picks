@@ -19,6 +19,27 @@ def split_tags(value: str) -> list[str]:
     return [part.strip() for part in re.split(r"[,，、/]", value or "") if part.strip()]
 
 
+def meal_times(value: str) -> list[str]:
+    tags: list[str] = []
+    mapping = {
+        "brunch": "brunch",
+        "早午": "brunch",
+        "中饭": "lunch",
+        "午饭": "lunch",
+        "午餐": "lunch",
+        "晚饭": "dinner",
+        "晚餐": "dinner",
+        "夜宵": "late-night",
+    }
+    text = value or ""
+    lowered = text.lower()
+    for original, normalized in mapping.items():
+        source = lowered if original == "brunch" else text
+        if original in source and normalized not in tags:
+            tags.append(normalized)
+    return tags
+
+
 REGION_ALIASES = {
     "衡山路/复兴西路": "衡山复兴",
     "衡山复兴": "衡山复兴",
@@ -251,6 +272,7 @@ def main() -> None:
             "priceMin": low,
             "priceMax": high,
             "occasions": occasions(row),
+            "mealTimes": meal_times(row.get("营业时间", "")),
             "maxPeople": max_people(row.get("人数", "")),
             "reservationLevel": reservation_level,
             "reservationLabel": reservation_label,

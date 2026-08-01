@@ -29,8 +29,24 @@
 
   <view wx:if="{{peopleRequired}}" class="divider"></view>
 
+  <view class="section fade-up meal-section">
+    <view class="section-title">{{peopleRequired ? '再选时间' : '先选时间'}}</view>
+    <view class="meal-grid">
+      <button
+        wx:for="{{mealOptions}}"
+        wx:key="id"
+        class="meal-chip paper-card {{item.selected ? 'selected' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="chooseMeal"
+        aria-pressed="{{item.selected}}"
+      >{{item.label}}</button>
+    </view>
+  </view>
+
+  <view class="divider"></view>
+
   <view class="section fade-up region-section {{peopleRequired ? '' : 'region-section-only'}}">
-    <view class="section-title">{{peopleRequired ? '再选区域' : '选区域'}} <text class="section-hint">可多选，按行政区筛选</text></view>
+    <view class="section-title">{{peopleRequired ? '最后选区域' : '再选区域'}} <text class="section-hint">可多选，按行政区筛选</text></view>
     <view class="region-grid">
       <button
         wx:for="{{regions}}"

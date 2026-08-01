@@ -30,7 +30,7 @@ Page({
   data: { primaryOptions: PRIMARY_OPTIONS, secondaryOptions: SECONDARY_OPTIONS, selected: "" },
 
   onShow() {
-    const selection = { occasion: "", tags: {}, people: "", regions: [] };
+    const selection = { occasion: "", tags: {}, people: "", meals: ["any"], regions: [] };
     const app = getApp();
     app.globalData.selection = selection;
     wx.setStorageSync("selection", selection);
@@ -50,7 +50,7 @@ Page({
 
   explore() {
     const app = getApp();
-    app.globalData.selection = { occasion: "explore", tags: presets.explore, people: "", regions: [] };
+    app.globalData.selection = { occasion: "explore", tags: presets.explore, people: "", meals: ["any"], regions: [] };
     wx.setStorageSync("selection", app.globalData.selection);
     wx.navigateTo({ url: "/pages/results/results?explore=1" });
   }

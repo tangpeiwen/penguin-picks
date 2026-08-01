@@ -1,5 +1,6 @@
 const restaurants = require("../data/restaurants");
 const { REGION_OPTIONS } = require("../config/regions");
+const { MEAL_LABELS } = require("../config/meals");
 
 const OCCASION_LABELS = {
   date: "约会",
@@ -69,6 +70,16 @@ function occasionFits(restaurant, occasion) {
   return restaurant.occasions.indexOf(occasion) !== -1;
 }
 
+function mealFits(restaurant, meal) {
+  if (!meal || meal === "any") return true;
+  return Array.isArray(restaurant.mealTimes) && restaurant.mealTimes.indexOf(meal) !== -1;
+}
+
+function selectedMeals(selection) {
+  if (Array.isArray(selection.meals) && selection.meals.length) return selection.meals;
+  return selection.meal ? [selection.meal] : [];
+}
+
 function filterValues(filters, key) {
   const value = filters[key];
   if (Array.isArray(value)) return value.filter(Boolean);
@@ -91,6 +102,8 @@ function scoreRestaurant(restaurant, selection, filters) {
     score += regions.some((region) => regionMatches(restaurant, region)) ? 14 : -8;
   }
   if (selection.people) score += peopleFits(restaurant, selection.people) ? 6 : -20;
+  const meals = selectedMeals(selection).filter((item) => item !== "any");
+  if (meals.length) score += meals.some((meal) => mealFits(restaurant, meal)) ? 6 : -20;
   const cuisines = filterValues(filters, "cuisine");
   const prices = filterValues(filters, "price");
   const diets = filterValues(filters, "diet");
@@ -103,6 +116,7 @@ function scoreRestaurant(restaurant, selection, filters) {
 
 function recommendAll(selection, filters) {
   const activeRegions = selectedRegions(selection).filter((item) => item !== "不限区域");
+  const activeMeals = selectedMeals(selection).filter((item) => item !== "any");
   const cuisines = filterValues(filters, "cuisine");
   const prices = filterValues(filters, "price");
   const diets = filterValues(filters, "diet");
@@ -110,6 +124,7 @@ function recommendAll(selection, filters) {
   return restaurants
     .filter((restaurant) => !activeRegions.length || activeRegions.some((region) => regionMatches(restaurant, region)))
     .filter((restaurant) => peopleFits(restaurant, selection.people))
+    .filter((restaurant) => !activeMeals.length || activeMeals.some((meal) => mealFits(restaurant, meal)))
     .filter((restaurant) => occasionFits(restaurant, selection.occasion))
     .filter((restaurant) => !cuisines.length || cuisines.indexOf(cuisineGroup(restaurant)) !== -1)
     .filter((restaurant) => !diets.length || diets.every((diet) => restaurant.diet.indexOf(diet) !== -1))
@@ -144,6 +159,8 @@ function describeSelectionParts(selection) {
   }
   const occasion = OCCASION_LABELS[selection.occasion] || "这顿饭";
   const people = PEOPLE_LABELS[selection.people] || "人数不限";
+  const meals = selectedMeals(selection).filter((item) => item !== "any").map((item) => MEAL_LABELS[item]).filter(Boolean);
+  const meal = meals.length <= 2 ? meals.join("、") : `${meals.slice(0, 2).join("、")}等${meals.length}个时间`;
   const regions = selectedRegions(selection);
   let region = "全上海";
   if (regions.length && regions.indexOf("不限区域") === -1) {
@@ -162,7 +179,7 @@ function describeSelectionParts(selection) {
   };
   return {
     occasion,
-    details: `${people} · ${region}`,
+    details: [people, meal, region].filter(Boolean).join(" · "),
     judgment: judgments[selection.occasion] || "这几家比较合适。"
   };
 }
@@ -179,9 +196,11 @@ module.exports = {
   describeSelectionParts,
   regionMatches,
   selectedRegions,
+  selectedMeals,
   cuisineGroup,
   defaultPriceFilter,
   occasionFits,
+  mealFits,
   OCCASION_LABELS,
   PEOPLE_LABELS,
   requiredPeople

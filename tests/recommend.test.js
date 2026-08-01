@@ -8,6 +8,7 @@ const {
   cuisineGroup,
   defaultPriceFilter,
   occasionFits,
+  mealFits,
   requiredPeople
 } = require("../miniprogram/utils/recommend");
 const { orderDishData } = require("../miniprogram/utils/order-card");
@@ -36,6 +37,11 @@ assert.equal(restaurants.filter((item) => Number.isFinite(item.latitude) && Numb
 assert.ok(restaurants.filter((item) => Number.isFinite(item.latitude)).every((item) => item.latitude > 30 && item.latitude < 32.5));
 assert.ok(restaurants.filter((item) => Number.isFinite(item.longitude)).every((item) => item.longitude > 120 && item.longitude < 123));
 assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "building")));
+assert.ok(restaurants.every((item) => Array.isArray(item.mealTimes)), "meal tags should be generated from 营业时间");
+assert.ok(restaurants.some((item) => item.mealTimes.includes("brunch")), "brunch should remain a distinct meal tag");
+assert.ok(restaurants.some((item) => item.mealTimes.includes("lunch")));
+assert.ok(restaurants.some((item) => item.mealTimes.includes("dinner")));
+assert.ok(restaurants.some((item) => item.mealTimes.includes("late-night")));
 assert.ok(restaurants.every((item) => Array.isArray(item.areas) && item.areas.length), "reviewed 片区 should be present on every restaurant");
 assert.ok(restaurants.filter((item) => item.building).length >= 20, "building summaries should be extracted where available");
 assert.ok(restaurants.every((item) => item.building.length <= 20));
@@ -151,6 +157,8 @@ assert.equal(bellaNapoli.areas[0], "南京西路");
 const multiRegionSelection = { occasion: "friends", people: "upto4", regions: ["静安区", "黄浦区"] };
 assert.ok(describeSelection(multiRegionSelection).includes("静安区、黄浦区"));
 assert.ok(!describeSelection(multiRegionSelection).includes("——"));
+assert.ok(describeSelection({ ...multiRegionSelection, meal: "brunch" }).includes("Brunch"));
+assert.ok(describeSelection({ ...multiRegionSelection, meals: ["brunch", "lunch"] }).includes("Brunch、中饭"));
 
 const pho = restaurants.find((restaurant) => restaurant.id === "G5bsxgt7wZHxPlhS");
 assert.deepEqual(pho.occasions, ["solo", "casual"]);
@@ -165,6 +173,25 @@ assert.equal(restaurants.filter((restaurant) => restaurant.occasions.includes("t
 assert.ok(guestOnly.length > 0 && guestOnly.every((restaurant) => !occasionFits(restaurant, "talk")), "请客 should not imply 谈事");
 assert.ok(talkOnly.length > 0 && talkOnly.every((restaurant) => !occasionFits(restaurant, "guest")), "谈事 should not imply 请客");
 assert.ok(dateOnly.length > 0 && dateOnly.every((restaurant) => !occasionFits(restaurant, "talk")), "约会 should not imply 谈事");
+
+const brunchRows = recommendAll(
+  { occasion: "explore", people: "", meals: ["brunch"], regions: ["不限区域"] },
+  { cuisine: [], price: [], diet: [] }
+);
+assert.ok(brunchRows.length >= 1);
+assert.ok(brunchRows.every((row) => mealFits(row, "brunch")), "brunch should hard-filter by CSV meal tag");
+const lateNightRows = recommendAll(
+  { occasion: "explore", people: "", meals: ["late-night"], regions: ["不限区域"] },
+  { cuisine: [], price: [], diet: [] }
+);
+assert.ok(lateNightRows.length >= 1);
+assert.ok(lateNightRows.every((row) => mealFits(row, "late-night")), "late-night should hard-filter by CSV meal tag");
+const daytimeRows = recommendAll(
+  { occasion: "explore", people: "", meals: ["brunch", "lunch"], regions: ["不限区域"] },
+  { cuisine: [], price: [], diet: [] }
+);
+assert.ok(daytimeRows.length > brunchRows.length);
+assert.ok(daytimeRows.every((row) => mealFits(row, "brunch") || mealFits(row, "lunch")), "multiple meal tags should match any selected meal");
 
 const japanese = recommend(
   { occasion: "date", people: "2", regions: ["静安区"] },

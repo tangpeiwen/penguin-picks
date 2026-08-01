@@ -3,7 +3,8 @@ App({
     selection: {
       occasion: "",
       people: "",
-      region: ""
+      region: "",
+      meals: ["any"]
     }
   }
 });

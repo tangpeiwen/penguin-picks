@@ -6,12 +6,30 @@ const PEOPLE = [
 ];
 
 const { REGION_OPTIONS } = require("../../config/regions");
+const { MEAL_OPTIONS } = require("../../config/meals");
 
 function decorateRegions(selectedRegions) {
   return REGION_OPTIONS.map((item) => ({
     ...item,
     selected: selectedRegions.indexOf(item.id) !== -1
   }));
+}
+
+function decorateMeals(selectedMeals) {
+  return MEAL_OPTIONS.map((item) => ({
+    ...item,
+    selected: selectedMeals.indexOf(item.id) !== -1
+  }));
+}
+
+function normalizeMeals(selection) {
+  const validMeals = MEAL_OPTIONS.map((item) => item.id);
+  const storedMeals = Array.isArray(selection.meals)
+    ? selection.meals
+    : (selection.meal ? [selection.meal] : ["any"]);
+  const selectedMeals = storedMeals.filter((item) => validMeals.indexOf(item) !== -1);
+  if (!selectedMeals.length || selectedMeals.indexOf("any") !== -1) return ["any"];
+  return selectedMeals;
 }
 
 function normalizePeople(value) {
@@ -28,8 +46,10 @@ function normalizePeople(value) {
 Page({
   data: {
     peopleOptions: PEOPLE,
+    mealOptions: decorateMeals(["any"]),
     regions: decorateRegions([]),
     people: "",
+    meals: ["any"],
     peopleRequired: true,
     pageTitle: "几个人？ 在哪里？",
     selectedRegions: [],
@@ -43,10 +63,13 @@ Page({
       ? selection.regions
       : (selection.region ? [selection.region] : []);
     const selectedRegions = storedRegions.filter((item) => validRegions.indexOf(item) !== -1);
+    const selectedMeals = normalizeMeals(selection);
     const peopleRequired = ["solo", "date"].indexOf(selection.occasion) === -1;
     const automaticPeople = selection.occasion === "solo" ? "1" : "2";
     this.setData({
       people: peopleRequired ? normalizePeople(selection.people) : automaticPeople,
+      meals: selectedMeals,
+      mealOptions: decorateMeals(selectedMeals),
       peopleRequired,
       pageTitle: peopleRequired ? "几个人？ 在哪里？" : "想去哪里？",
       selectedRegions,
@@ -65,6 +88,21 @@ Page({
 
   choosePeople(event) {
     this.setData({ people: event.currentTarget.dataset.id }, () => this.updateReady());
+  },
+
+  chooseMeal(event) {
+    const meal = event.currentTarget.dataset.id || "any";
+    let selectedMeals = this.data.meals.slice();
+    if (meal === "any") {
+      selectedMeals = ["any"];
+    } else {
+      selectedMeals = selectedMeals.filter((item) => item !== "any");
+      const index = selectedMeals.indexOf(meal);
+      if (index === -1) selectedMeals.push(meal);
+      else selectedMeals.splice(index, 1);
+      if (!selectedMeals.length) selectedMeals = ["any"];
+    }
+    this.setData({ meals: selectedMeals, mealOptions: decorateMeals(selectedMeals) });
   },
 
   chooseRegion(event) {
@@ -89,6 +127,8 @@ Page({
     if (!this.data.ready) return;
     const selection = wx.getStorageSync("selection") || {};
     selection.people = this.data.people;
+    selection.meals = this.data.meals.length ? this.data.meals : ["any"];
+    delete selection.meal;
     selection.regions = this.data.selectedRegions;
     delete selection.region;
     getApp().globalData.selection = selection;
