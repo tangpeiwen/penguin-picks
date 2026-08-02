@@ -12,12 +12,12 @@ const FILTER_OPTIONS = {
   ],
   price: [
     { id: "any", label: "不限", full: true },
-    { id: "0-100", label: "＜¥100" },
-    { id: "100-200", label: "¥100–200" },
-    { id: "200-300", label: "¥200–300" },
-    { id: "300-500", label: "¥300–500" },
-    { id: "500-700", label: "¥500–700" },
-    { id: "700-9999", label: "¥700 以上" }
+    { id: "0-100", label: "¥100以内" },
+    { id: "100-200", label: "¥200以内" },
+    { id: "200-300", label: "¥300以内" },
+    { id: "300-500", label: "¥500以内" },
+    { id: "500-700", label: "¥700以内" },
+    { id: "700-9999", label: "¥700+" }
   ],
   diet: [
     { id: "no-spicy", label: "不吃辣" },
@@ -27,7 +27,7 @@ const FILTER_OPTIONS = {
   ]
 };
 
-const FILTER_LABELS = { cuisine: "菜系", price: "人均", diet: "忌口" };
+const FILTER_LABELS = { cuisine: "菜系", price: "人均预算", diet: "忌口" };
 const CARD_WIDTH = 630;
 const CARD_MAX_HEIGHT = 1300;
 const CARD_FOOTER_HEIGHT = 170;
@@ -113,6 +113,13 @@ function queueException(item) {
   return item.reservationLabel || "";
 }
 
+function listBadges(item) {
+  return [
+    item.privateRoom ? "有包间" : "",
+    queueException(item)
+  ].filter(Boolean);
+}
+
 function navigationContentTop() {
   try {
     if (typeof wx.getMenuButtonBoundingClientRect === "function") {
@@ -130,9 +137,6 @@ function navigationContentTop() {
 
 function selectedFilterLabel(key, values) {
   if (!values.length) return FILTER_LABELS[key];
-  if (key === "price" && values.length === 2 && values.indexOf("0-100") !== -1 && values.indexOf("100-200") !== -1) {
-    return "¥200 内";
-  }
   if (values.length === 1) {
     const option = FILTER_OPTIONS[key].find((item) => item.id === values[0]);
     return option ? option.label : FILTER_LABELS[key];
@@ -148,7 +152,7 @@ Page({
     results: [],
     loading: true,
     filters: { cuisine: [], price: [], diet: [], visitStatus: [] },
-    filterLabels: { cuisine: "菜系", price: "人均", diet: "忌口" },
+    filterLabels: { cuisine: "菜系", price: "人均预算", diet: "忌口" },
     activeFilter: "",
     activeTitle: "",
     activeOptions: [],
@@ -214,7 +218,7 @@ Page({
         priceDisplay: `¥${item.priceLabel}/人`,
         ...orderDishData(item),
         cardReview: item.fullReview || item.review,
-        queueException: queueException(item),
+        listBadges: listBadges(item),
         fallbackNameFont: HAND_FONT_MISSING_HAN.test(item.name),
         detailLabel: item.visited ? "点菜卡" : "待吃卡",
         reviewHeading: item.visited ? "我的一句话" : "为什么想去",
@@ -310,8 +314,8 @@ Page({
   toggleFilterOption(event) {
     const value = event.currentTarget.dataset.value;
     let draftValues;
-    if (this.data.activeFilter === "price" && value === "any") {
-      draftValues = [];
+    if (this.data.activeFilter === "price") {
+      draftValues = value === "any" || this.data.draftValues.indexOf(value) !== -1 ? [] : [value];
     } else {
       draftValues = this.data.draftValues.indexOf(value) === -1
         ? [...this.data.draftValues, value]

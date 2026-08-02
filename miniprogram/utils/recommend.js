@@ -42,7 +42,7 @@ function cuisineGroup(restaurant) {
 }
 
 function defaultPriceFilter(selection) {
-  return selection.occasion === "casual" ? ["0-100", "100-200"] : [];
+  return selection.occasion === "casual" ? ["100-200"] : [];
 }
 
 function regionMatches(restaurant, region) {

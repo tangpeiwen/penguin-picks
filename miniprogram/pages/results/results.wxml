@@ -87,7 +87,13 @@
             </view>
           </view>
           <text class="restaurant-review">{{item.review}}</text>
-          <text wx:if="{{item.queueException}}" class="queue-exception">{{item.queueException}}</text>
+          <view wx:if="{{item.listBadges.length}}" class="list-badges">
+            <text
+              wx:for="{{item.listBadges}}"
+              wx:key="*this"
+              class="list-badge"
+            >{{item}}</text>
+          </view>
         </view>
       </view>
     </view>
@@ -115,20 +121,35 @@
   <view wx:if="{{orderCard}}" class="order-mask" bindtap="closeOrderCard">
     <view class="order-modal">
       <view class="order-card" catchtap="noop">
-        <text class="order-eyebrow">PEIWEN PICKS · {{orderCard.detailLabel}}</text>
-        <view
-          class="order-name-row"
-          data-value="{{orderCard.name}}"
-          data-label="店名"
-          bindlongpress="copyText"
-        >
-          <view class="order-name hand-title {{orderCard.fallbackNameFont ? 'fallback-name-font' : ''}}">{{orderCard.name}}</view>
-          <button class="copy-icon-button" data-value="{{orderCard.name}}" data-label="店名" bindtap="copyText" aria-label="复制店名">
-            <view class="copy-glyph"><view class="copy-back"></view><view class="copy-front"></view></view>
-          </button>
+        <view class="order-head">
+          <view class="order-title-block">
+            <text class="order-eyebrow">PEIWEN PICKS · {{orderCard.detailLabel}}</text>
+            <view
+              class="order-name-row"
+              data-value="{{orderCard.name}}"
+              data-label="店名"
+              bindtap="copyText"
+              aria-role="button"
+              aria-label="复制店名"
+            >
+              <text class="order-name hand-title {{orderCard.fallbackNameFont ? 'fallback-name-font' : ''}}">{{orderCard.name}}</text>
+              <view class="name-copy-indicator" aria-hidden="true">
+                <view class="copy-glyph"><view class="copy-back"></view><view class="copy-front"></view></view>
+              </view>
+            </view>
+            <text class="order-meta">{{orderCard.cuisineLabel}} · {{orderCard.priceDisplay}}</text>
+            <text class="order-location">{{orderCard.locationSummary}}</text>
+          </view>
+          <view wx:if="{{orderCard.photoPath}}" class="order-photo-wrap">
+            <image
+              class="order-photo"
+              src="{{orderCard.photoPath}}"
+              mode="aspectFill"
+              lazy-load="{{true}}"
+              aria-label="{{orderCard.name}}照片"
+            ></image>
+          </view>
         </view>
-        <text class="order-meta">{{orderCard.cuisineLabel}} · {{orderCard.priceDisplay}}</text>
-        <text class="order-location">{{orderCard.locationSummary}}</text>
         <block wx:if="{{orderCard.cardDishes.length}}">
           <view class="order-divider"></view>
           <view class="dish-heading hand-title">{{orderCard.dishHeading}}</view>

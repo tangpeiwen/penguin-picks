@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import re
@@ -13,6 +14,7 @@ from typing import Optional
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "outputs" / "大众点评_吃过.csv"
 TARGET = ROOT / "miniprogram" / "data" / "restaurants.js"
+PHOTO_DIR = ROOT / "miniprogram" / "assets" / "restaurants"
 
 
 def split_tags(value: str) -> list[str]:
@@ -59,6 +61,10 @@ def has_visited(value: str) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "是", "去过", "吃过"}
 
 
+def truthy_marker(value: str) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "是", "有"}
+
+
 def split_dish_names(value: str) -> list[str]:
     text = (value or "").strip(" ，,、/；;！!")
     if not text:
@@ -88,6 +94,13 @@ def coordinate(row: dict[str, str], names: tuple[str, ...]) -> Optional[float]:
         except ValueError:
             pass
     return None
+
+
+def restaurant_photo_path(restaurant_id: str, include_photos: bool) -> str:
+    if not include_photos or not restaurant_id:
+        return ""
+    photo = PHOTO_DIR / f"{restaurant_id}.jpg"
+    return f"/assets/restaurants/{restaurant_id}.jpg" if photo.exists() else ""
 
 
 def building_name(address: str) -> str:
@@ -179,7 +192,7 @@ def reservation_display(value: str) -> str:
     return ""
 
 
-def occasions(row: dict[str, str]) -> list[str]:
+def occasions(row: dict[str, str], meals: list[str]) -> list[str]:
     source = row.get("场合", "")
     tags: list[str] = []
     mapping = {
@@ -198,6 +211,8 @@ def occasions(row: dict[str, str]) -> list[str]:
     for original, normalized_values in mapping.items():
         if original in source:
             tags.extend(normalized_values)
+    if "brunch" in meals:
+        tags.append("solo")
     return list(dict.fromkeys(tags)) or ["browse"]
 
 
@@ -238,7 +253,7 @@ def diet_flags(row: dict[str, str], cuisines: list[str]) -> list[str]:
     return flags
 
 
-def main() -> None:
+def main(include_photos: bool = False) -> None:
     with SOURCE.open("r", encoding="utf-8-sig", newline="") as source:
         source_rows = [row for row in csv.DictReader(source) if (row.get("评价") or "").strip()]
 
@@ -256,14 +271,16 @@ def main() -> None:
 
     restaurants = []
     for index, row in enumerate(reviewed, start=1):
+        restaurant_id = (row.get("店铺ID") or "").strip() or f"restaurant-{index}"
         low, high = price_range(row.get("人均", ""))
         cuisines = split_tags(row.get("菜系", ""))
         dishes = dish_names(row)
+        meals = meal_times(row.get("营业时间", ""))
         reservation_level, reservation_label = reservation(row.get("订位", ""))
         latitude = coordinate(row, ("纬度", "latitude", "lat"))
         longitude = coordinate(row, ("经度", "longitude", "lng", "lon"))
         restaurant = {
-            "id": row.get("店铺ID") or f"restaurant-{index}",
+            "id": restaurant_id,
             "name": (row.get("店名") or "未命名餐厅").strip(),
             "visited": has_visited(row.get("去过", "")),
             "cuisines": cuisines,
@@ -271,9 +288,10 @@ def main() -> None:
             "priceLabel": (row.get("人均") or "价格待确认").strip(),
             "priceMin": low,
             "priceMax": high,
-            "occasions": occasions(row),
-            "mealTimes": meal_times(row.get("营业时间", "")),
+            "occasions": occasions(row, meals),
+            "mealTimes": meals,
             "maxPeople": max_people(row.get("人数", "")),
+            "privateRoom": truthy_marker(row.get("是否有包间", "")),
             "reservationLevel": reservation_level,
             "reservationLabel": reservation_label,
             "reservationNote": (row.get("订位") or "建议到店前确认").strip(),
@@ -291,6 +309,7 @@ def main() -> None:
             "star": float(row.get("星级") or 0),
             "diet": diet_flags(row, cuisines),
             "url": (row.get("大众点评链接") or "").strip(),
+            "photoPath": restaurant_photo_path(restaurant_id, include_photos),
         }
         restaurants.append(restaurant)
 
@@ -308,4 +327,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Build miniprogram restaurant data from the private CSV export.")
+    parser.add_argument(
+        "--include-photos",
+        action="store_true",
+        help="Emit local restaurant photo paths after the image assets are ready to be committed.",
+    )
+    main(parser.parse_args().include_photos)

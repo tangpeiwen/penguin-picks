@@ -28,6 +28,8 @@ assert.ok(restaurants.every((item) => item.dishes.every((dish) =>
 assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "pitfall")));
 assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "reservationDisplay")));
 assert.equal(restaurants.filter((item) => item.reservationDisplay).length, 13);
+assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "privateRoom")));
+assert.equal(restaurants.filter((item) => item.privateRoom).length, 49);
 assert.ok(restaurants.every((item) => item.reservationLabel), "every result card should have a concise queue label");
 assert.ok(restaurants.some((item) => item.reservationLabel === "基本不用排队"));
 assert.ok(restaurants.some((item) => item.reservationLabel === "可能要排队"));
@@ -37,8 +39,11 @@ assert.equal(restaurants.filter((item) => Number.isFinite(item.latitude) && Numb
 assert.ok(restaurants.filter((item) => Number.isFinite(item.latitude)).every((item) => item.latitude > 30 && item.latitude < 32.5));
 assert.ok(restaurants.filter((item) => Number.isFinite(item.longitude)).every((item) => item.longitude > 120 && item.longitude < 123));
 assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "building")));
+assert.ok(restaurants.every((item) => Object.prototype.hasOwnProperty.call(item, "photoPath")));
+assert.equal(restaurants.filter((item) => item.photoPath).length, 0, "code-only builds should not reference uncommitted restaurant photos");
 assert.ok(restaurants.every((item) => Array.isArray(item.mealTimes)), "meal tags should be generated from 营业时间");
 assert.ok(restaurants.some((item) => item.mealTimes.includes("brunch")), "brunch should remain a distinct meal tag");
+assert.ok(restaurants.filter((item) => item.mealTimes.includes("brunch")).every((item) => item.occasions.includes("solo")), "every brunch restaurant should also appear under 一人食");
 assert.ok(restaurants.some((item) => item.mealTimes.includes("lunch")));
 assert.ok(restaurants.some((item) => item.mealTimes.includes("dinner")));
 assert.ok(restaurants.some((item) => item.mealTimes.includes("late-night")));
@@ -55,7 +60,7 @@ assert.equal(cuisineGroup(mexican), "西餐", "Mexican cuisine must map to Weste
 const indian = restaurants.find((restaurant) => restaurant.cuisines.includes("印度菜"));
 assert.equal(cuisineGroup(indian), "东南亚", "Indian cuisine should follow the product's Southeast Asia filter decision");
 assert.equal(restaurants.filter((item) => item.diet.includes("vegetarian")).length, 5, "vegetarian should require an explicit signal");
-assert.deepEqual(defaultPriceFilter({ occasion: "casual" }), ["0-100", "100-200"]);
+assert.deepEqual(defaultPriceFilter({ occasion: "casual" }), ["100-200"]);
 assert.deepEqual(defaultPriceFilter({ occasion: "guest" }), []);
 assert.deepEqual(defaultPriceFilter({ occasion: "date" }), []);
 
@@ -165,11 +170,15 @@ assert.deepEqual(pho.occasions, ["solo", "casual"]);
 assert.equal(occasionFits(pho, "date"), false);
 assert.equal(occasionFits(pho, "solo"), true);
 
+const soloRestaurant = restaurants.find((restaurant) => restaurant.name === "Solo");
+assert.equal(soloRestaurant.maxPeople, 10);
+assert.ok(soloRestaurant.occasions.includes("guest"));
+
 const guestOnly = restaurants.filter((restaurant) => restaurant.occasions.includes("guest") && !restaurant.occasions.includes("talk"));
 const talkOnly = restaurants.filter((restaurant) => restaurant.occasions.includes("talk") && !restaurant.occasions.includes("guest"));
 const dateOnly = restaurants.filter((restaurant) => restaurant.occasions.includes("date") && !restaurant.occasions.includes("talk"));
-assert.equal(restaurants.filter((restaurant) => restaurant.occasions.includes("guest")).length, 58);
-assert.equal(restaurants.filter((restaurant) => restaurant.occasions.includes("talk")).length, 39);
+assert.equal(restaurants.filter((restaurant) => restaurant.occasions.includes("guest")).length, 56);
+assert.equal(restaurants.filter((restaurant) => restaurant.occasions.includes("talk")).length, 37);
 assert.ok(guestOnly.length > 0 && guestOnly.every((restaurant) => !occasionFits(restaurant, "talk")), "请客 should not imply 谈事");
 assert.ok(talkOnly.length > 0 && talkOnly.every((restaurant) => !occasionFits(restaurant, "guest")), "谈事 should not imply 请客");
 assert.ok(dateOnly.length > 0 && dateOnly.every((restaurant) => !occasionFits(restaurant, "talk")), "约会 should not imply 谈事");
